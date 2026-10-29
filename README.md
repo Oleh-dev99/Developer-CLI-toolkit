@@ -4,23 +4,23 @@ A command-line toolkit for developers, built with Node.js.
 
 ## Usage
 
-Run it straight from the repository:
+Install the dependencies first:
 
 ```sh
-node bin/toolsmith.js
+npm install
+```
+
+Then run it straight from the repository:
+
+```sh
+node bin/toolsmith.js --help
 ```
 
 Or make the `toolsmith` command available globally from your local checkout:
 
 ```sh
 npm link
-toolsmith
-```
-
-Both print:
-
-```
-toolsmith v0.1.0
+toolsmith --help
 ```
 
 ## Roadmap

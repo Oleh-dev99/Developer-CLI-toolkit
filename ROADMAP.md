@@ -18,11 +18,11 @@ toolsmith is being built in six milestones. M1 is the foundation that every late
 
 ### Command framework
 
-- [ ] Add `commander`; keep `bin/toolsmith.js` a thin entry point, with each command in its own module under `src/commands/`
-- [ ] `toolsmith --help` lists every command, and each command has its own `--help`
-- [ ] `--version` reads the version from `package.json` instead of a hard-coded string
-- [ ] Errors print a short message to stderr and exit with a non-zero code; `--debug` adds the stack trace
-- [ ] Set the minimum supported Node.js version (`engines` in `package.json`)
+- [x] Add `commander`; keep `bin/toolsmith.js` a thin entry point, with each command in its own module under `src/commands/`
+- [x] `toolsmith --help` lists every command, and each command has its own `--help`
+- [x] `--version` reads the version from `package.json` instead of a hard-coded string
+- [x] Errors print a short message to stderr and exit with a non-zero code; `--debug` adds the stack trace
+- [x] Set the minimum supported Node.js version (`engines` in `package.json`)
 
 ### Colored output
 

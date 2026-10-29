@@ -1,3 +1,5 @@
 #!/usr/bin/env node
 
-console.log("toolsmith v0.1.0");
+import { run } from "../src/cli.js";
+
+await run(process.argv);
