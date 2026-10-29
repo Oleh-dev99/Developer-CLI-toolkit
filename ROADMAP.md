@@ -26,8 +26,8 @@ toolsmith is being built in six milestones. M1 is the foundation that every late
 
 ### Colored output
 
-- [ ] Output helpers for success, info, warning and error messages, colored with Node's built-in `util.styleText` (or `picocolors`)
-- [ ] Respect `NO_COLOR`, `FORCE_COLOR` and `--no-color`, and drop colors when output isn't a terminal (pipes, CI logs)
+- [x] Output helpers for success, info, warning and error messages, colored with Node's built-in `util.styleText` (or `picocolors`)
+- [x] Respect `NO_COLOR`, `FORCE_COLOR` and `--no-color`, and drop colors when output isn't a terminal (pipes, CI logs)
 
 ### Configuration — `~/.toolsmithrc`
 

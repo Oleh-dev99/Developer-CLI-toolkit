@@ -7,9 +7,9 @@
     "toolsmith": "bin/toolsmith.js"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22.12"
   },
   "dependencies": {
-    "commander": "^14.0.3"
+    "commander": "^15.0.0"
   }
 }

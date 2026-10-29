@@ -1,3 +1,5 @@
+import { success } from "../output.js";
+
 export function register(program) {
   program
     .command("hello")
@@ -14,6 +16,6 @@ Examples:
   Hello, Ada!`,
     )
     .action((name) => {
-      console.log(`Hello, ${name}!`);
+      success(`Hello, ${name}!`);
     });
 }
