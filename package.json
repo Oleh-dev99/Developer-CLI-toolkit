@@ -1,0 +1,8 @@
+{
+  "name": "toolsmith",
+  "version": "0.1.0",
+  "type": "module",
+  "bin": {
+    "toolsmith": "bin/toolsmith.js"
+  }
+}

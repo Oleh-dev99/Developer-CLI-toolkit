@@ -1,0 +1,38 @@
+# Dependencies
+node_modules/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Diagnostic reports (https://nodejs.org/api/report.html)
+report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
+
+# Test coverage
+coverage/
+.nyc_output/
+
+# Build output
+dist/
+build/
+
+# Caches
+.npm/
+.eslintcache
+*.tsbuildinfo
+
+# Output of `npm pack`
+*.tgz
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# OS files
+.DS_Store
+Thumbs.db
