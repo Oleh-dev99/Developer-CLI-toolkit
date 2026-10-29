@@ -1,0 +1,50 @@
+import { spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const bin = fileURLToPath(new URL("../bin/toolsmith.js", import.meta.url));
+
+// Runs the CLI in a child process and resolves to { stdout, stderr, code }.
+// TOOLSMITH_CONFIG always points to a temp path, so the real ~/.toolsmithrc is
+// never read, and NO_COLOR=1 is set unless a test overrides it. Set a variable
+// to undefined in `env` to remove it.
+export function runCli(args, { env = {} } = {}) {
+  const childEnv = { ...process.env };
+  // The test runner sets FORCE_COLOR for test files when the terminal has
+  // colors, so start from the same color setup everywhere.
+  delete childEnv.FORCE_COLOR;
+  delete childEnv.NODE_DISABLE_COLORS;
+  childEnv.NO_COLOR = "1";
+  Object.assign(childEnv, env);
+  childEnv.TOOLSMITH_CONFIG ||= join(tmpdir(), `toolsmith-no-config-${randomUUID()}.json`);
+
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [bin, ...args], {
+      env: childEnv,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.setEncoding("utf8").on("data", (chunk) => (stdout += chunk));
+    child.stderr.setEncoding("utf8").on("data", (chunk) => (stderr += chunk));
+    child.on("error", reject);
+    child.on("close", (code) => resolve({ stdout, stderr, code }));
+  });
+}
+
+// Creates a temp folder that is deleted when the test `t` finishes.
+export function tempDir(t) {
+  const dir = mkdtempSync(join(tmpdir(), "toolsmith-test-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  return dir;
+}
+
+// Writes `contents` to a config file in a fresh temp folder and returns its path.
+export function writeTempConfig(t, contents) {
+  const path = join(tempDir(t), "config.json");
+  writeFileSync(path, contents);
+  return path;
+}

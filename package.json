@@ -6,6 +6,10 @@
   "bin": {
     "toolsmith": "bin/toolsmith.js"
   },
+  "scripts": {
+    "test": "node --test",
+    "test:coverage": "node --test --experimental-test-coverage"
+  },
   "engines": {
     "node": ">=22.12"
   },

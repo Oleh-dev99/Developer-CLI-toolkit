@@ -39,10 +39,10 @@ toolsmith is being built in six milestones. M1 is the foundation that every late
 
 ### Tests — `node:test`
 
-- [ ] `npm test` runs the suite with `node --test`
-- [ ] Test helper that runs the CLI as a child process and captures stdout, stderr and the exit code
-- [ ] Tests for `--help`, `--version`, unknown commands and config loading
-- [ ] `npm run test:coverage` using Node's built-in coverage report
+- [x] `npm test` runs the suite with `node --test`
+- [x] Test helper that runs the CLI as a child process and captures stdout, stderr and the exit code
+- [x] Tests for `--help`, `--version`, unknown commands and config loading
+- [x] `npm run test:coverage` using Node's built-in coverage report
 
 ## M2 — File tools
 
