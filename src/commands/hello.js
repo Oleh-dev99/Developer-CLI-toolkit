@@ -1,6 +1,6 @@
 import { success } from "../output.js";
 
-export function register(program) {
+export function register(program, context) {
   program
     .command("hello")
     .description("print a friendly greeting")
@@ -13,9 +13,11 @@ Examples:
   Hello, world!
 
   $ toolsmith hello Ada
-  Hello, Ada!`,
+  Hello, Ada!
+
+To change "Hello", set "greeting" in ~/.toolsmithrc.`,
     )
     .action((name) => {
-      success(`Hello, ${name}!`);
+      success(`${context.config.settings.greeting}, ${name}!`);
     });
 }

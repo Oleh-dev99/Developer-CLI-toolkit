@@ -31,11 +31,11 @@ toolsmith is being built in six milestones. M1 is the foundation that every late
 
 ### Configuration — `~/.toolsmithrc`
 
-- [ ] Read `~/.toolsmithrc` (JSON) from the folder returned by `os.homedir()`, so it works on every OS
-- [ ] Merge it over built-in defaults; command-line flags override it
-- [ ] Invalid JSON or values give a clear error that names the file; unknown settings only warn
-- [ ] `TOOLSMITH_CONFIG` environment variable points to a different file (tests use it to stay out of the real home folder)
-- [ ] `toolsmith config` shows which file is in use and the effective settings
+- [x] Read `~/.toolsmithrc` (JSON) from the folder returned by `os.homedir()`, so it works on every OS
+- [x] Merge it over built-in defaults; command-line flags override it
+- [x] Invalid JSON or values give a clear error that names the file; unknown settings only warn
+- [x] `TOOLSMITH_CONFIG` environment variable points to a different file (tests use it to stay out of the real home folder)
+- [x] `toolsmith config` shows which file is in use and the effective settings
 
 ### Tests — `node:test`
 
