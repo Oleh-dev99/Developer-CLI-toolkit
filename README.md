@@ -1,5 +1,7 @@
 # toolsmith
 
+[![CI](https://github.com/Oleh-dev99/Developer-CLI-toolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/Oleh-dev99/Developer-CLI-toolkit/actions/workflows/ci.yml)
+
 A command-line toolkit for developers, built with Node.js.
 
 ## Usage

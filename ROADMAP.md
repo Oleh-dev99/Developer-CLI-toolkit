@@ -46,8 +46,8 @@ toolsmith is being built in twelve milestones. M1 is the foundation that every l
 
 ### Continuous integration — GitHub Actions
 
-- [ ] Run the tests on every push and pull request
-- [ ] Test on Linux, macOS and Windows, with every supported Node.js LTS version (including 22.12, the minimum in `engines`)
+- [x] Run the tests on every push and pull request to `main`
+- [x] Test on Linux, macOS and Windows, with every supported Node.js LTS version (including 22.12, the minimum in `engines`)
 - [ ] Protect `main` so pull requests can only merge when CI passes
 
 ## M2 — File tools
