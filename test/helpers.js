@@ -2,11 +2,16 @@ import { execFileSync, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { linkSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { delimiter, dirname, join } from "node:path";
 import { PassThrough, Writable } from "node:stream";
 import { fileURLToPath } from "node:url";
 
 const bin = fileURLToPath(new URL("../bin/toolsmith.js", import.meta.url));
+
+// The fake npm (see fixtures/fake-npm/npm) is in this folder, which runCli puts
+// first on the PATH. It writes its arguments to fake-npm.txt in the folder it
+// runs in, and fails with the exit code in FAKE_NPM_EXIT_CODE if that's set.
+export const fakeNpmFolder = fileURLToPath(new URL("fixtures/fake-npm", import.meta.url));
 
 // For runCli: makes the CLI believe its input is a terminal, so it asks its
 // questions, and the test answers them through `input`.
@@ -32,11 +37,18 @@ export function promptStreams(answers) {
 
 // Runs the CLI in a child process and resolves to { stdout, stderr, code }.
 // TOOLSMITH_CONFIG always points to a temp path, so the real ~/.toolsmithrc is
-// never read, and NO_COLOR=1 is set unless a test overrides it. Set a variable
-// to undefined in `env` to remove it. `cwd` sets the folder the CLI runs in, and
-// `input` is typed into the CLI (otherwise its input is empty).
+// never read, and NO_COLOR=1 is set unless a test overrides it. The fake npm
+// comes first on the PATH, so tests never run the real npm (or download
+// anything). Set a variable to undefined in `env` to remove it, and PATH to
+// replace the whole PATH. `cwd` sets the folder the CLI runs in, and `input` is
+// typed into the CLI (otherwise its input is empty).
 export function runCli(args, { env = {}, cwd, input } = {}) {
-  const childEnv = { ...process.env };
+  const childEnv = {};
+  for (const [key, value] of Object.entries(process.env)) {
+    // Windows spells it "Path"; one spelling lets `env` replace it.
+    childEnv[key.toUpperCase() === "PATH" ? "PATH" : key] = value;
+  }
+  childEnv.PATH = [fakeNpmFolder, childEnv.PATH].filter(Boolean).join(delimiter);
   // The test runner sets FORCE_COLOR for test files when the terminal has
   // colors, so start from the same color setup everywhere.
   delete childEnv.FORCE_COLOR;
@@ -66,6 +78,15 @@ export function tempDir(t) {
   const dir = mkdtempSync(join(tmpdir(), "toolsmith-test-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   return dir;
+}
+
+// For runCli: a git config of its own, with Grace Hopper as the user, so the
+// real ~/.gitconfig and the system's config are never read. The ceiling keeps
+// git from finding a repository above the temp folder.
+export function gitEnv(t) {
+  const file = join(tempDir(t), "gitconfig");
+  writeFileSync(file, "[user]\n\tname = Grace Hopper\n\temail = grace@example.com\n");
+  return { GIT_CONFIG_GLOBAL: file, GIT_CONFIG_NOSYSTEM: "1", GIT_CEILING_DIRECTORIES: tmpdir() };
 }
 
 // Writes `contents` to a config file in a fresh temp folder and returns its path.

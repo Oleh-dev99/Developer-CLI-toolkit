@@ -14,9 +14,14 @@ const filesIn = (folder) =>
 
 const read = (...parts) => readFileSync(join(...parts), "utf8");
 
+// These tests are about the files; git init and npm install have their own
+// tests in new-git-npm.test.js.
+const filesOnly = ["--no-git", "--no-install"];
+
 test("creates a project from a template, filling in the placeholders", async (t) => {
   const cwd = tempDir(t);
-  const { stdout, stderr, code } = await runCli(["new", "node-cli", "my-tool", "--author", "Ada Lovelace"], { cwd });
+  const args = ["new", "node-cli", "my-tool", "--author", "Ada Lovelace", ...filesOnly];
+  const { stdout, stderr, code } = await runCli(args, { cwd });
   assert.equal(code, 0);
   assert.equal(stderr, "");
   assert.equal(
@@ -51,19 +56,20 @@ test("the name defaults to the folder's name, and the author to git's user.name"
   writeFileSync(gitConfig, "[user]\n\tname = Grace Hopper\n");
   const env = { GIT_CONFIG_GLOBAL: gitConfig, GIT_CONFIG_NOSYSTEM: "1" };
 
-  assert.equal((await runCli(["new", "node-cli", "web-app"], { cwd, env })).code, 0);
+  assert.equal((await runCli(["new", "node-cli", "web-app", ...filesOnly], { cwd, env })).code, 0);
   const packageJson = JSON.parse(read(cwd, "web-app", "package.json"));
   assert.equal(packageJson.name, "web-app");
   assert.equal(packageJson.author, "Grace Hopper");
 
   // --name replaces the folder's name everywhere, file names included.
-  assert.equal((await runCli(["new", "node-cli", "folder", "--name", "other", "--author", "x"], { cwd })).code, 0);
+  const args = ["new", "node-cli", "folder", "--name", "other", "--author", "x", ...filesOnly];
+  assert.equal((await runCli(args, { cwd })).code, 0);
   assert.deepEqual(filesIn(join(cwd, "folder")), [".gitignore", "README.md", "bin", "bin/other.js", "package.json"]);
 });
 
 test("without a directory it uses the current folder, named after it", async (t) => {
   const cwd = tempDir(t);
-  const { stdout, code } = await runCli(["new", "node-cli", "--author", "x"], { cwd });
+  const { stdout, code } = await runCli(["new", "node-cli", "--author", "x", ...filesOnly], { cwd });
   assert.equal(code, 0);
   assert.ok(stdout.endsWith("from the node-cli template in the current folder.\n"), stdout);
   assert.equal(JSON.parse(read(cwd, "package.json")).name, basename(cwd));
@@ -78,7 +84,7 @@ test("refuses a folder that isn't empty, unless --force is given", async (t) => 
   assert.equal(refused.stderr, "error: existing isn't empty; add --force to write into it anyway\n");
   assert.deepEqual(filesIn(join(cwd, "existing")), ["README.md", "notes.txt"]);
 
-  const forced = await runCli(["new", "node-cli", "existing", "--author", "x", "--force"], { cwd });
+  const forced = await runCli(["new", "node-cli", "existing", "--author", "x", "--force", ...filesOnly], { cwd });
   assert.equal(forced.code, 0);
   assert.match(forced.stdout, /^ {2}existing\/README\.md \(replaced\)$/m);
   assert.equal(read(cwd, "existing", "notes.txt"), "keep me");
@@ -87,7 +93,7 @@ test("refuses a folder that isn't empty, unless --force is given", async (t) => 
 
 test("a folder with only .git in it counts as empty", async (t) => {
   const cwd = makeTree(t, { "project/.git/HEAD": "ref: refs/heads/main\n" });
-  const { code } = await runCli(["new", "node-cli", "project", "--author", "x"], { cwd });
+  const { code } = await runCli(["new", "node-cli", "project", "--author", "x", ...filesOnly], { cwd });
   assert.equal(code, 0);
   assert.deepEqual(
     filesIn(join(cwd, "project")).filter((path) => !path.startsWith(".git/")),

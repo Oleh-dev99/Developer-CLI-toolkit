@@ -1,3 +1,8 @@
 # Project templates are copied byte for byte into new projects, so git must not
 # change their line endings (Windows checkouts would otherwise get CRLF).
 templates/** -text
+
+# The fake npm for tests is a shell script on Linux and macOS, which needs LF,
+# and a batch file on Windows, which is safest with CRLF.
+test/fixtures/fake-npm/npm text eol=lf
+test/fixtures/fake-npm/npm.cmd text eol=crlf

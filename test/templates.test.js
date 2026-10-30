@@ -55,7 +55,8 @@ test("new --list shows every built-in template with its description", async () =
 for (const template of templateNames) {
   test(`the ${template} template creates a complete project`, async (t) => {
     const cwd = tempDir(t);
-    const { stderr, code } = await runCli(["new", template, values.name, "--author", values.author], { cwd });
+    const args = ["new", template, values.name, "--author", values.author, "--no-git", "--no-install"];
+    const { stderr, code } = await runCli(args, { cwd });
     assert.equal(code, 0, stderr);
     const project = join(cwd, values.name);
     const templateFiles = filesIn(join(templatesFolder, template)).filter((path) => path !== "template.json");

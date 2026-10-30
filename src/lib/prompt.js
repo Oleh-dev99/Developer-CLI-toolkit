@@ -89,8 +89,25 @@ export function createPrompt({ input = process.stdin, output = process.stderr, t
       }
     },
 
-    // A yes/no question: only "y" or "yes" means yes. No answer at all (the
-    // input ends, or Ctrl+C) is a no.
+    // A yes/no question with a default, shown as [Y/n] or [y/N], which Enter
+    // takes. Answers other than y, yes, n or no are explained and asked again,
+    // and no answer at all rejects, as in ask().
+    async yesNo(question, { defaultValue = false } = {}) {
+      const shown = `${question} ${defaultValue ? "[Y/n]" : "[y/N]"} `;
+      for (;;) {
+        const answer = (await nextLine(shown)).trim();
+        if (answer === "") {
+          return defaultValue;
+        }
+        if (/^(y|yes|n|no)$/i.test(answer)) {
+          return /^y/i.test(answer);
+        }
+        output.write("  Please answer y or n.\n");
+      }
+    },
+
+    // A yes/no question where only "y" or "yes" means yes; `question` shows
+    // its own [y/N]. No answer at all (the input ends, or Ctrl+C) is a no.
     async confirm(question) {
       try {
         return /^y(es)?$/i.test((await nextLine(question)).trim());

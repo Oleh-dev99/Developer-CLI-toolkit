@@ -27,15 +27,24 @@ export async function git(args, { cwd = process.cwd(), env } = {}) {
   }
 }
 
-// Throws a clear error unless `cwd` is inside a git repository.
-export async function ensureRepository(cwd = process.cwd()) {
+// Whether `cwd` is inside a git repository. Other problems, like git not being
+// installed, throw.
+export async function insideRepository(cwd = process.cwd()) {
   try {
     await git(["rev-parse", "--git-dir"], { cwd });
+    return true;
   } catch (err) {
     if (/not a git repository/i.test(err.stderr ?? "")) {
-      throw new Error(`${cwd} isn't in a git repository`);
+      return false;
     }
     throw err;
+  }
+}
+
+// Throws a clear error unless `cwd` is inside a git repository.
+export async function ensureRepository(cwd = process.cwd()) {
+  if (!(await insideRepository(cwd))) {
+    throw new Error(`${cwd} isn't in a git repository`);
   }
 }
 

@@ -27,13 +27,14 @@ toolsmith --help
 
 ### Create a project from a template
 
-`toolsmith new` copies a template into a folder and fills in `{{name}}`, `{{author}}` and `{{year}}`, in file contents and file names:
+`toolsmith new` copies a template into a folder and fills in `{{name}}`, `{{author}}` and `{{year}}`, in file contents and file names. Then it runs `git init` and commits the new files, and runs `npm install` if the template has a `package.json`:
 
 ```sh
 toolsmith new --list                               # the built-in templates
 toolsmith new node-cli my-tool                     # creates my-tool/
 toolsmith new node-lib my-lib --author "Ada Lovelace"
 toolsmith new web-static --force                   # into the current folder, even if it has files
+toolsmith new node-lib my-lib --no-git --no-install
 ```
 
 | Template | What you get |
@@ -49,9 +50,12 @@ $ toolsmith new
 Template (node-cli, node-lib, web-static): node-lib
 Project name [my-project]:
 Author [Ada Lovelace]:
+Run npm install? [Y/n]
 ```
 
 The name defaults to the folder's name and the author to your git `user.name`. `--yes` (`-y`) takes the defaults without asking, and in scripts or CI, where the input isn't a terminal, it never asks. A folder that isn't empty is left alone unless you add `--force`.
+
+The first commit, "Initial commit from toolsmith (node-lib)", holds just the files from the template. If the folder is already inside a git repository, `git init` is skipped, and if git isn't installed you get a warning and the rest carries on. npm's output is shown as it runs; if `npm install` fails, toolsmith says so and exits with an error, but the project's files stay. `--no-git` and `--no-install` skip either step.
 
 ### Commit message templates
 

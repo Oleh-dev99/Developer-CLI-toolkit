@@ -22,6 +22,20 @@ test("ask explains a bad or empty answer and asks again", async () => {
   assert.equal(io.written(), 'Name:   "a/b" has a slash.\nName:   Please enter a value.\nName: ');
 });
 
+test("yesNo shows its default, which Enter takes, and asks again after other answers", async () => {
+  const io = promptStreams("\n\nmaybe\nYES\nn\n");
+  const prompt = createPrompt(io);
+  assert.equal(await prompt.yesNo("Install?", { defaultValue: true }), true);
+  assert.equal(await prompt.yesNo("Delete?"), false);
+  assert.equal(await prompt.yesNo("Again?"), true);
+  assert.equal(await prompt.yesNo("Last?", { defaultValue: true }), false);
+  prompt.close();
+  assert.equal(
+    io.written(),
+    "Install? [Y/n] Delete? [y/N] Again? [y/N]   Please answer y or n.\nAgain? [y/N] Last? [Y/n] ",
+  );
+});
+
 test("answers piped in all at once reach the right questions", async () => {
   const io = promptStreams("y\nno\n");
   const prompt = createPrompt(io);
@@ -37,7 +51,8 @@ test("the end of the input cancels a question", async () => {
   const io = promptStreams("");
   const prompt = createPrompt(io);
   await assert.rejects(prompt.ask("Name"), PromptCancelled);
-  assert.equal(io.written(), "Name: \n");
+  await assert.rejects(prompt.yesNo("Install?", { defaultValue: true }), PromptCancelled);
+  assert.equal(io.written(), "Name: \nInstall? [Y/n] \n");
 });
 
 test("Ctrl+C in a terminal cancels a question", async () => {

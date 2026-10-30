@@ -1,13 +1,14 @@
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { lstat, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { userInfo } from "node:os";
-import { basename, dirname, join, resolve } from "node:path";
+import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { displayPath, isValidFileName } from "../lib/files.js";
-import { git } from "../lib/git.js";
+import { git, insideRepository } from "../lib/git.js";
+import { npm } from "../lib/npm.js";
 import { createPrompt, PromptCancelled } from "../lib/prompt.js";
 import { walk } from "../lib/walk.js";
-import { success } from "../output.js";
+import { info, success, warn } from "../output.js";
 
 const templatesFolder = fileURLToPath(new URL("../../templates/", import.meta.url));
 
@@ -31,11 +32,13 @@ export function register(program) {
     .option("--author <name>", "the author (default: your git user.name)")
     .option("-y, --yes", "don't ask anything, take the defaults")
     .option("--force", "write into a folder that isn't empty, replacing files with the same names")
+    .option("--no-git", "don't run git init or make a first commit")
+    .option("--no-install", "don't run npm install")
     .addHelpText(
       "after",
       `
 Examples:
-  Answer a few questions (template, name, author):
+  Answer a few questions (template, name, author, npm install):
   $ toolsmith new
 
   Create the folder my-tool from the node-cli template:
@@ -44,6 +47,9 @@ Examples:
   The same without any questions, for a script:
   $ toolsmith new node-cli my-tool --yes
 
+  Only the files, without git init or npm install:
+  $ toolsmith new node-lib my-lib --no-git --no-install
+
   Use the current folder even though it has files in it, with another author:
   $ toolsmith new node-cli --force --author "Ada Lovelace"
 
@@ -51,7 +57,11 @@ In a terminal, toolsmith asks for whatever you didn't give on the command line;
 press Enter to take the default in brackets. With --yes, or when the input
 isn't a terminal (scripts, CI), it never asks. Templates can use {{name}},
 {{author}} and {{year}} in file contents and in file and folder names; see them
-with --list.`,
+with --list.
+
+After writing the files, toolsmith runs git init and commits them, unless the
+folder is already in a git repository, and then npm install if the template
+has a package.json.`,
     )
     .action(async (template, directory = ".", options) => {
       if (options.list) {
@@ -62,7 +72,9 @@ with --list.`,
       const where = displayPath(target) || "the current folder";
       // Questions only when someone can answer them: in a terminal, without --yes.
       const prompt = options.yes || !process.stdin.isTTY ? null : createPrompt();
-      const given = { template, name: options.name, author: options.author };
+      // --no-install answers the npm install question in advance.
+      const install = options.install ? undefined : false;
+      const given = { template, name: options.name, author: options.author, install };
 
       // Mistakes on the command line first, then the folder, then questions.
       checkGivenValues(given, Boolean(prompt));
@@ -76,10 +88,19 @@ with --list.`,
       }
 
       const values = { name: chosen.name, author: chosen.author, year: String(new Date().getFullYear()) };
-      for (const { path, replaced } of await generate(templateFolder(chosen.template), target, values)) {
+      const written = await generate(templateFolder(chosen.template), target, values);
+      for (const { path, replaced } of written) {
         console.log(`  ${displayPath(path)}${replaced ? " (replaced)" : ""}`);
       }
       success(`Created "${values.name}" from the ${chosen.template} template in ${where}.`);
+
+      // git first, so the first commit has only the files from the template.
+      if (options.git) {
+        await initRepository(target, where, chosen.template, written);
+      }
+      if (chosen.install) {
+        await installDependencies(target, where);
+      }
     });
 }
 
@@ -97,13 +118,14 @@ function checkGivenValues({ template, name }, canAsk) {
   }
 }
 
-// Picks the template, name and author. Values from the command line are used
-// as they are. The rest is asked with `prompt`, which shows the default from
-// `defaults` and asks again after a bad answer; with no prompt (--yes, or input
-// that isn't a terminal) the defaults are taken.
+// Picks the template, name and author, and whether to run npm install. Values
+// from the command line are used as they are. The rest is asked with `prompt`,
+// which shows the default from `defaults` and asks again after a bad answer;
+// with no prompt (--yes, or input that isn't a terminal) the defaults are
+// taken, and npm install runs.
 export async function chooseValues(given, { defaults, prompt }) {
   checkGivenValues(given, Boolean(prompt));
-  let { template, name, author } = given;
+  let { template, name, author, install } = given;
   try {
     if (template === undefined) {
       const templates = builtInTemplates();
@@ -119,6 +141,11 @@ export async function chooseValues(given, { defaults, prompt }) {
         })
       : defaults.name;
     author ??= prompt ? await prompt.ask("Author", { defaultValue: defaults.author }) : defaults.author;
+    // Only a project with a package.json has anything to install.
+    if (!hasPackageJson(template)) {
+      install = false;
+    }
+    install ??= prompt ? await prompt.yesNo("Run npm install?", { defaultValue: true }) : true;
   } catch (err) {
     if (err instanceof PromptCancelled) {
       throw new Error("cancelled; nothing was created");
@@ -129,7 +156,7 @@ export async function chooseValues(given, { defaults, prompt }) {
   if (!isValidFileName(name)) {
     throw new Error(badName(name));
   }
-  return { template, name, author };
+  return { template, name, author, install };
 }
 
 function badName(name) {
@@ -168,6 +195,10 @@ function templateFolder(name) {
     throw new Error(`there's no template named "${name}"; see "toolsmith new --list"`);
   }
   return join(templatesFolder, name);
+}
+
+function hasPackageJson(template) {
+  return existsSync(join(templateFolder(template), "package.json"));
 }
 
 // Refuses a folder that already has something in it, unless `force`. A folder
@@ -246,4 +277,45 @@ async function generate(source, target, values) {
     written.push({ path: to, replaced });
   }
   return written;
+}
+
+// Makes the new project a git repository, with the `written` files as its
+// first commit. Other files (with --force the folder may have some) are left
+// out, and so are files that .gitignore ignores. Problems are only warnings:
+// the project is there either way.
+async function initRepository(target, where, template, written) {
+  try {
+    if (await insideRepository(target)) {
+      info(`Skipped git init: ${where} is already in a git repository.`);
+      return;
+    }
+    await git(["init", "--quiet"], { cwd: target });
+  } catch (err) {
+    warn(`skipped git init (${err.message})`);
+    return;
+  }
+  try {
+    // The paths are file names, not patterns.
+    const options = { cwd: target, env: { GIT_LITERAL_PATHSPECS: "1" } };
+    const paths = written.map(({ path }) => relative(target, path).split(sep).join("/"));
+    const files = await git(["ls-files", "-z", "--others", "--exclude-standard", "--", ...paths], options);
+    await git(["add", "--", ...files.split("\0").filter(Boolean)], options);
+    await git(["commit", "--quiet", "-m", `Initial commit from toolsmith (${template})`], options);
+  } catch (err) {
+    warn(`initialized a git repository, but couldn't commit the files (${err.message})`);
+    return;
+  }
+  success("Initialized a git repository and committed the files.");
+}
+
+// Runs npm install in the new project, with npm's output shown. If it fails,
+// the project's files stay as they are.
+async function installDependencies(target, where) {
+  info("Running npm install...");
+  try {
+    await npm(["install"], { cwd: target });
+  } catch (err) {
+    throw new Error(`${err.message}; the project's files are kept, so run "npm install" in ${where} to finish`);
+  }
+  success("npm install finished.");
 }
