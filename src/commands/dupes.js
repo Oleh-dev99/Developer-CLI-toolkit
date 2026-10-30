@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { InvalidArgumentError } from "commander";
 import { displayPath, findFiles, withoutHardLinks } from "../lib/files.js";
@@ -100,7 +99,9 @@ async function findDuplicates(files) {
 }
 
 // Reads the file in chunks, so even a huge file never has to fit in memory.
+// node:crypto is only imported here, which keeps toolsmith's startup fast.
 async function sha256(path) {
+  const { createHash } = await import("node:crypto");
   const hash = createHash("sha256");
   for await (const chunk of createReadStream(path)) {
     hash.update(chunk);

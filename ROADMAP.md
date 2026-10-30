@@ -133,7 +133,7 @@ toolsmith is being built in twelve milestones. M1 is the foundation that every l
 - [x] A plugin that fails to load prints a warning and never breaks the rest of the CLI
 - [x] Built-in commands always win name clashes; warn when two plugins register the same command
 - [x] `toolsmith plugins` lists installed plugins, their versions and the commands they add
-- [ ] Startup stays fast with many plugins installed (measure it; load plugin code only when needed)
+- [x] Startup stays fast with many plugins installed (measure it; load plugin code only when needed)
 - [ ] Example plugin (`toolsmith-plugin-example`) and a guide for plugin authors
 - [x] Document that plugins run with your full user permissions, so only install plugins you trust
 - [x] Tests load fixture plugins from a temporary `node_modules`

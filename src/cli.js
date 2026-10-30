@@ -78,12 +78,19 @@ export async function run(argv) {
     command.register(program, context);
   }
   // Plugins load only with a config file that could be read, because it may
-  // turn some of them off. `toolsmith plugins` lists what happened to each, so
-  // it doesn't need the warnings too. (toolsmith's own options take no values,
-  // so the command is the first argument that isn't an option.)
+  // turn some of them off. Those that list their commands are imported only
+  // when needed: for the command being run, or all of them for help and for
+  // `toolsmith plugins`. That one lists what happened to each plugin, so it
+  // doesn't need the warnings too.
   if (config) {
-    const quiet = argv.slice(2).find((arg) => !arg.startsWith("-")) === "plugins";
-    context.plugins = await loadPlugins(program, context, { enabled: config.settings.plugins, version, quiet });
+    const asked = readCommandLine(argv.slice(2));
+    context.plugins = await loadPlugins(program, context, {
+      enabled: config.settings.plugins,
+      version,
+      command: asked.command,
+      all: asked.help || asked.command === "help" || asked.command === "plugins",
+      quiet: asked.command === "plugins",
+    });
   } else {
     context.plugins = [];
   }
@@ -99,4 +106,27 @@ export async function run(argv) {
     }
     process.exitCode = 1;
   }
+}
+
+// What the arguments after "toolsmith" ask for, read the way Commander reads
+// them: { command }, { help: true } for toolsmith's own help (-h or --help
+// before any command, or no command at all), or { version: true }. toolsmith's
+// own options take no values, so the command is the first argument that isn't
+// an option ("-" alone isn't one), or the one after "--".
+export function readCommandLine(args) {
+  for (const [index, arg] of args.entries()) {
+    if (arg === "-V" || arg === "--version") {
+      return { version: true };
+    }
+    if (arg === "-h" || arg === "--help") {
+      return { help: true };
+    }
+    if (arg === "--") {
+      return index + 1 < args.length ? { command: args[index + 1] } : { help: true };
+    }
+    if (!(arg.length > 1 && arg.startsWith("-"))) {
+      return { command: arg };
+    }
+  }
+  return { help: true };
 }

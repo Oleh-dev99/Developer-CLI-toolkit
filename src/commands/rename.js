@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import { lstat, readdir, rename } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import { displayPath, findFiles, isValidFileName } from "../lib/files.js";
@@ -142,7 +141,9 @@ async function findConflicts(plan) {
 
 // A case-insensitive file system may ignore a rename that only changes case,
 // so go through a temporary name, and put the old name back if that fails.
+// node:crypto is only imported here, which keeps toolsmith's startup fast.
 async function renameViaTemp(from, to) {
+  const { randomUUID } = await import("node:crypto");
   const temp = join(dirname(from), `.toolsmith-rename-${randomUUID()}`);
   await rename(from, temp);
   try {

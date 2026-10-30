@@ -54,6 +54,7 @@ function list(plugins, { json }) {
       status: plugin.status,
       reason: plugin.reason,
       toolsmithRange: plugin.toolsmithRange,
+      onDemand: plugin.onDemand,
       commands: plugin.commands,
       skippedCommands: plugin.skippedCommands,
     }));
@@ -90,9 +91,13 @@ function list(plugins, { json }) {
   info(`${count(plugins.length, "plugin")}: ${tally.join(", ")}.`);
 }
 
-function describe({ status, reason, commands }) {
+// A plugin that lists its commands in its package.json is "loaded on demand":
+// the listing imports every plugin, but other commands import it only for its
+// own commands.
+function describe({ status, reason, onDemand, commands }) {
   if (status === "loaded") {
-    return commands.length > 0 ? `loaded, adds ${commands.join(", ")}` : "loaded, adds no commands";
+    const loaded = onDemand ? "loaded on demand" : "loaded";
+    return `${loaded}, adds ${commands.length > 0 ? commands.join(", ") : "no commands"}`;
   }
   return status === "off" ? "turned off" : `${status}: ${reason}`;
 }

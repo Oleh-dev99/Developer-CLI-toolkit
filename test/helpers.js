@@ -98,10 +98,18 @@ export function gitEnv(t) {
 
 // Files for makeTree: a plugin package `name` in `folder` (a node_modules
 // folder), with `code` as its index.js. Its package.json is an ES module
-// package with `version`, and with `toolsmith` as the range in its
-// peerDependencies if that's given; `packageJson` replaces it entirely.
-export function pluginPackage(name, code, { folder = "node_modules", version = "1.0.0", toolsmith, packageJson } = {}) {
-  const json = { name, version, type: "module", ...(toolsmith && { peerDependencies: { toolsmith } }) };
+// package with `version`, with `toolsmith` as the range in its
+// peerDependencies, and with `commands` listed under "toolsmith" (so it's
+// loaded on demand), if those are given; `packageJson` replaces it entirely.
+export function pluginPackage(name, code, options = {}) {
+  const { folder = "node_modules", version = "1.0.0", toolsmith, commands, packageJson } = options;
+  const json = {
+    name,
+    version,
+    type: "module",
+    ...(toolsmith && { peerDependencies: { toolsmith } }),
+    ...(commands && { toolsmith: { commands } }),
+  };
   return {
     [`${folder}/${name}/package.json`]: packageJson ?? JSON.stringify(json),
     [`${folder}/${name}/index.js`]: code,

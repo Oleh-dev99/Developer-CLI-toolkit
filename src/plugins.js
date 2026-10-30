@@ -2,8 +2,6 @@ import { readdir, readFile } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { Command } from "commander";
-import satisfies from "semver/functions/satisfies.js";
-import validRange from "semver/ranges/valid.js";
 import { displayPath } from "./lib/files.js";
 import { error, info, success, warn } from "./output.js";
 
@@ -17,6 +15,12 @@ const pluginName = /^toolsmith-plugin-./;
 // plugins, the one found first wins. With `quiet`, there are no warnings; the
 // results say it all.
 //
+// A plugin that lists its commands in its package.json ("toolsmith":
+// { "commands": [...] }) is only imported when it's needed: when `command` is
+// one of them, or with `all` (for help and `toolsmith plugins`). Otherwise its
+// commands are stand-ins, which make their names known. Name clashes are
+// settled with the names it lists, so they come out the same either way.
+//
 // Resolves to what happened to each plugin found, for `toolsmith plugins`:
 //   name, version, source ("project" or "global"), folder
 //   status           "loaded", "off" (turned off in the config file),
@@ -24,20 +28,26 @@ const pluginName = /^toolsmith-plugin-./;
 //   reason           why it's incompatible or skipped
 //   toolsmithRange   the toolsmith versions it supports, from its
 //                    peerDependencies (or null)
+//   onDemand         whether it lists its commands, so it's imported only
+//                    when needed
 //   commands         the names of the commands it added
 //   skippedCommands  { name, reason } for each command that was skipped
-export async function loadPlugins(program, context, { enabled, version, quiet = false, cwd = process.cwd() }) {
+export async function loadPlugins(program, context, options) {
+  const { enabled, version, quiet = false, command, all = false, cwd = process.cwd() } = options;
   const report = quiet ? () => {} : warn;
   // Command names and aliases, and who has them: null for toolsmith itself.
   const taken = new Map([["help", null]]);
-  for (const command of program.commands) {
-    for (const name of [command.name(), ...command.aliases()]) {
+  for (const builtIn of program.commands) {
+    for (const name of [builtIn.name(), ...builtIn.aliases()]) {
       taken.set(name, null);
     }
   }
 
   const results = [];
-  for (const plugin of await findPlugins(cwd)) {
+  const plugins = await findPlugins(cwd);
+  // All package.json files are read at once, which is faster than one by one.
+  const packages = await Promise.all(plugins.map((plugin) => readPackage(plugin.folder).catch((err) => err)));
+  for (const [index, plugin] of plugins.entries()) {
     const result = {
       name: plugin.name,
       version: null,
@@ -46,12 +56,31 @@ export async function loadPlugins(program, context, { enabled, version, quiet = 
       status: "skipped",
       reason: null,
       toolsmithRange: null,
+      onDemand: false,
       commands: [],
       skippedCommands: [],
     };
     results.push(result);
+    // Takes the names of a command for this plugin, unless one of them is
+    // taken already, which is reported. Returns whether it could.
+    const claim = (name, names) => {
+      const clash = names.find((each) => taken.has(each));
+      if (clash !== undefined) {
+        const owner = taken.get(clash);
+        const reason = owner
+          ? `the plugin ${owner} already adds "${clash}"`
+          : `toolsmith has a built-in command "${clash}"`;
+        skipCommand(result, name, reason, report);
+        return false;
+      }
+      for (const each of names) {
+        taken.set(each, plugin.name);
+      }
+      return true;
+    };
+
     // A broken package.json only matters for a plugin that's going to be used.
-    const packageJson = await readPackage(plugin.folder).catch((err) => err);
+    const packageJson = packages[index];
     if (!(packageJson instanceof Error)) {
       result.version = packageJson.version ?? null;
       result.toolsmithRange = packageJson.peerDependencies?.toolsmith ?? null;
@@ -69,13 +98,38 @@ export async function loadPlugins(program, context, { enabled, version, quiet = 
       skipBroken(result, packageJson, report);
       continue;
     }
-    const problem = compatibilityProblem(result.toolsmithRange, version);
+    const problem = await compatibilityProblem(result.toolsmithRange, version);
     if (problem) {
       result.status = "incompatible";
       result.reason = problem;
       report(`plugin ${plugin.name} was skipped: ${problem}`);
       continue;
     }
+    let listed;
+    try {
+      listed = listedCommands(packageJson);
+    } catch (err) {
+      skipBroken(result, err, report);
+      continue;
+    }
+
+    // A plugin that lists its commands gets their names now, whether or not
+    // it's imported, and is imported only when one of them is needed.
+    let claimed;
+    if (listed) {
+      result.onDemand = true;
+      claimed = listed.filter(({ name, aliases }) => claim(name, [name, ...aliases]));
+      const needed = all || claimed.some(({ name, aliases }) => command === name || aliases.includes(command));
+      if (!needed) {
+        result.status = "loaded";
+        for (const { name, aliases } of claimed) {
+          addStandIn(program, plugin.name, name, aliases);
+          result.commands.push(name);
+        }
+        continue;
+      }
+    }
+
     let commands;
     try {
       commands = await registerPlugin(plugin.folder, packageJson, program, context, version);
@@ -83,25 +137,32 @@ export async function loadPlugins(program, context, { enabled, version, quiet = 
       skipBroken(result, err, report);
       continue;
     }
-
     result.status = "loaded";
-    for (const command of commands) {
-      const names = [command.name(), ...command.aliases()];
-      const clash = names.find((name) => taken.has(name));
-      if (clash !== undefined) {
-        const owner = taken.get(clash);
-        const reason = owner
-          ? `the plugin ${owner} already adds "${clash}"`
-          : `toolsmith has a built-in command "${clash}"`;
-        result.skippedCommands.push({ name: command.name(), reason });
-        report(`plugin ${plugin.name}'s command "${command.name()}" was skipped: ${reason}`);
+    for (const added of commands) {
+      if (listed) {
+        // Its names were claimed from the list; it has to match the list.
+        const entry = listed.find(({ name }) => name === added.name());
+        if (!entry) {
+          skipCommand(result, added.name(), 'its package.json doesn\'t list it under "toolsmith"', report);
+          continue;
+        }
+        if (!claimed.includes(entry)) {
+          continue; // Its name was taken; that's been reported.
+        }
+        if (entry.aliases.join("\n") !== added.aliases().join("\n")) {
+          skipCommand(result, added.name(), "its aliases aren't the ones its package.json lists", report);
+          continue;
+        }
+      } else if (!claim(added.name(), [added.name(), ...added.aliases()])) {
         continue;
       }
-      for (const name of names) {
-        taken.set(name, plugin.name);
+      program.addCommand(added);
+      result.commands.push(added.name());
+    }
+    for (const { name } of claimed ?? []) {
+      if (!commands.some((added) => added.name() === name)) {
+        skipCommand(result, name, "the plugin lists it in its package.json, but doesn't add it", report);
       }
-      program.addCommand(command);
-      result.commands.push(command.name());
     }
   }
   return results;
@@ -112,14 +173,60 @@ function skipBroken(result, err, report) {
   report(`plugin ${result.name} failed to load, so it was skipped (${err.message})`);
 }
 
+function skipCommand(result, name, reason, report) {
+  result.skippedCommands.push({ name, reason });
+  report(`plugin ${result.name}'s command "${name}" was skipped: ${reason}`);
+}
+
+// The commands a plugin lists in its package.json, so that it can be imported
+// only when one of them runs: { "toolsmith": { "commands": [...] } }, with a
+// name for each command, or { "name": ..., "aliases": [...] } for one with
+// aliases. Resolves to { name, aliases } for each, or undefined if there's no
+// list. Throws for a list toolsmith can't use.
+function listedCommands(packageJson) {
+  const listed = packageJson.toolsmith?.commands;
+  if (listed === undefined) {
+    return undefined;
+  }
+  const isText = (value) => typeof value === "string";
+  const isTextList = (value) => Array.isArray(value) && value.every(isText);
+  const isEntry = (entry) =>
+    isText(entry) ||
+    (isObject(entry) && isText(entry.name) && (entry.aliases === undefined || isTextList(entry.aliases)));
+  if (!Array.isArray(listed) || !listed.every(isEntry)) {
+    throw new Error('"commands" under "toolsmith" in its package.json must list command names');
+  }
+  return listed.map((entry) =>
+    isText(entry) ? { name: entry, aliases: [] } : { name: entry.name, aliases: entry.aliases ?? [] },
+  );
+}
+
+// A stand-in for a command of a plugin that isn't imported, so that its name
+// is known (for suggestions after a typo). It never runs: when its name is on
+// the command line, the plugin is imported before the command line is parsed,
+// and the real command takes its place.
+function addStandIn(program, pluginName, name, aliases) {
+  program
+    .command(name)
+    .aliases(aliases)
+    .action(() => {
+      throw new Error(`the plugin ${pluginName} wasn't imported for its command "${name}"; this is a bug in toolsmith`);
+    });
+}
+
 // Why this toolsmith `version` can't run a plugin that supports `range` (from
-// its peerDependencies), or undefined if it can or there's no range. With
-// includePrerelease, a prerelease of toolsmith is compared like any version;
-// by default, semver lets it satisfy almost no range, not even ">=0.1.0".
-function compatibilityProblem(range, version) {
+// its peerDependencies), or undefined if it can or there's no range. semver is
+// only imported when there's a range to check. With includePrerelease, a
+// prerelease of toolsmith is compared like any version; by default, semver
+// lets it satisfy almost no range, not even ">=0.1.0".
+async function compatibilityProblem(range, version) {
   if (range === null) {
     return undefined;
   }
+  const [{ default: validRange }, { default: satisfies }] = await Promise.all([
+    import("semver/ranges/valid.js"),
+    import("semver/functions/satisfies.js"),
+  ]);
   if (typeof range !== "string" || validRange(range) === null) {
     return `its toolsmith version range ${JSON.stringify(range)} isn't valid`;
   }
@@ -137,13 +244,13 @@ function compatibilityProblem(range, version) {
 export async function findPlugins(cwd = process.cwd()) {
   const plugins = [];
   const used = new Map();
-  const seen = new Set();
-  for (const { folder, source } of packageFolders(cwd)) {
-    if (seen.has(folder)) {
-      continue;
-    }
-    seen.add(folder);
-    for (const name of await pluginsIn(folder)) {
+  // Each folder once, nearest first; all of them are read at once.
+  const folders = packageFolders(cwd).filter(
+    ({ folder }, index, all) => all.findIndex((other) => other.folder === folder) === index,
+  );
+  const names = await Promise.all(folders.map(({ folder }) => pluginsIn(folder)));
+  for (const [index, { folder, source }] of folders.entries()) {
+    for (const name of names[index]) {
       const plugin = { name, source, folder: join(folder, ...name.split("/")) };
       if (used.has(name)) {
         plugin.usedCopy = used.get(name);

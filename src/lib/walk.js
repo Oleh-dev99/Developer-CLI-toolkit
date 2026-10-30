@@ -1,6 +1,5 @@
 import { lstat, readdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import picomatch from "picomatch";
 import { warn } from "../output.js";
 
 // Walks the folder tree under `root` and yields { path, relativePath, type, size }
@@ -21,7 +20,7 @@ import { warn } from "../output.js";
 // Symlinks are listed but never followed, so a link can't cause a loop.
 // Anything below the root that can't be read is skipped with a warning.
 export async function* walk(root, { recursive = true, maxDepth = Infinity, ignore = [] } = {}) {
-  const isIgnored = ignoreMatcher(ignore);
+  const isIgnored = await ignoreMatcher(ignore);
   const depthLimit = recursive ? maxDepth : 1;
 
   async function* walkFolder(folder, relativeFolder, dirents, depth) {
@@ -68,7 +67,13 @@ export async function* walk(root, { recursive = true, maxDepth = Infinity, ignor
 
 // Patterns without "/" are matched against an entry's name, so they apply at
 // any depth; patterns with "/" are matched against its path from the root.
-function ignoreMatcher(patterns) {
+// picomatch is only imported when there are patterns, which keeps toolsmith's
+// startup fast.
+async function ignoreMatcher(patterns) {
+  if (patterns.length === 0) {
+    return () => false;
+  }
+  const { default: picomatch } = await import("picomatch");
   const byName = patterns.filter((pattern) => !pattern.includes("/"));
   const byPath = patterns.filter((pattern) => pattern.includes("/"));
   const matchesName = byName.length > 0 ? picomatch(byName, { dot: true }) : () => false;

@@ -78,6 +78,7 @@ test("toolsmith plugins --json gives the same for scripts", async (t) => {
     name,
     reason: null,
     toolsmithRange: null,
+    onDemand: false,
     commands: [],
     skippedCommands: [],
     ...fields,

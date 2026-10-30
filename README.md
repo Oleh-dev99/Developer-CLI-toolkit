@@ -107,11 +107,13 @@ Project plugins are found in the `node_modules` folder of the current folder or 
 
 ```text
 $ toolsmith plugins
-toolsmith-plugin-deploy  1.2.0  project  loaded, adds deploy
+toolsmith-plugin-deploy  1.2.0  project  loaded on demand, adds deploy
 toolsmith-plugin-old     0.3.0  project  incompatible: it needs toolsmith >=2.0.0, and this is toolsmith 0.1.0
 toolsmith-plugin-shout   1.0.0  global   turned off
 3 plugins: 1 loaded, 1 turned off, 1 incompatible.
 ```
+
+"Loaded on demand" means the plugin lists its commands (see below), so toolsmith only imports it for one of its own commands, for help, and for this list.
 
 To turn a plugin off or back on, use `toolsmith plugins disable <name>` and `toolsmith plugins enable <name>`. They set the plugin to `false` or `true` in the `"plugins"` setting of `~/.toolsmithrc`, and leave the rest of the file exactly as it is. A plugin that's turned off isn't loaded at all.
 
@@ -164,6 +166,21 @@ Say which versions of toolsmith your plugin works with in its `package.json`. to
 ```
 
 Mark the peer dependency optional, as above. npm installs peer dependencies by itself, and the name `toolsmith` on npm belongs to an unrelated package, which `npm install` would otherwise fetch.
+
+#### Keep toolsmith fast: list your commands
+
+List your plugin's commands under `"toolsmith"` in its `package.json`. Then toolsmith doesn't import your plugin every time it runs, only when one of your commands runs, for `toolsmith --help`, and for `toolsmith plugins`; every other command starts without it. A command with aliases is listed with them:
+
+```json
+{
+  "name": "toolsmith-plugin-shout",
+  "toolsmith": {
+    "commands": ["shout", { "name": "whisper", "aliases": ["psst"] }]
+  }
+}
+```
+
+The list has to match what `register(api)` adds: a command that isn't listed, a listed command it doesn't add, or different aliases get a warning, and those commands are skipped. Name clashes are settled with the list, so they come out the same as for a plugin without one. A plugin without the list is imported every time, which works just as well, only slower with many plugins: on a Windows test machine, 10 plugins of about 20 KB each made every toolsmith command about 27 ms slower without the list, and at most about 10 ms slower with it (as much as the measurements vary).
 
 ## Roadmap
 

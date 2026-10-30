@@ -1,6 +1,5 @@
 import { lstat } from "node:fs/promises";
 import { isAbsolute, relative, resolve, sep } from "node:path";
-import picomatch from "picomatch";
 import { warn } from "../output.js";
 import { statDetails, walk } from "./walk.js";
 
@@ -26,7 +25,7 @@ export async function findFiles(paths, { recursive }) {
           add(entry);
         }
       }
-    } else if (!stats && picomatch.scan(path).isGlob) {
+    } else if (!stats && (await importPicomatch()).scan(path).isGlob) {
       const matches = await expandGlob(path, recursive);
       if (matches.length === 0) {
         warn(`no files match ${path}`);
@@ -39,6 +38,12 @@ export async function findFiles(paths, { recursive }) {
     }
   }
   return [...files.values()];
+}
+
+// picomatch is only imported for paths that may be patterns, which keeps
+// toolsmith's startup fast.
+async function importPicomatch() {
+  return (await import("picomatch")).default;
 }
 
 // Hard links share their data, so only the first path to each is kept.
@@ -62,6 +67,7 @@ export function withoutHardLinks(files) {
 async function expandGlob(pattern, recursive) {
   // In a glob "\" escapes the next character, but on Windows it's a separator.
   const slashed = process.platform === "win32" ? pattern.replaceAll("\\", "/") : pattern;
+  const picomatch = await importPicomatch();
   const { base, glob } = picomatch.scan(slashed);
   const fullGlob = recursive && !glob.includes("/") ? `**/${glob}` : glob;
   const isMatch = picomatch(fullGlob);
