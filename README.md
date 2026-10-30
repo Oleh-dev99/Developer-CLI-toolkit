@@ -30,10 +30,17 @@ toolsmith --help
 `toolsmith new` copies a template into a folder and fills in `{{name}}`, `{{author}}` and `{{year}}`, in file contents and file names:
 
 ```sh
+toolsmith new --list                               # the built-in templates
 toolsmith new node-cli my-tool                     # creates my-tool/
-toolsmith new node-cli my-tool --author "Ada Lovelace"
-toolsmith new node-cli --force                     # into the current folder, even if it has files
+toolsmith new node-lib my-lib --author "Ada Lovelace"
+toolsmith new web-static --force                   # into the current folder, even if it has files
 ```
+
+| Template | What you get |
+|---|---|
+| `node-cli` | A command-line tool for Node.js, with a bin entry |
+| `node-lib` | A JavaScript library for Node.js (ESM), with `node:test` tests |
+| `web-static` | A static web page with HTML, CSS and JavaScript, no build step |
 
 The name defaults to the folder's name and the author to your git `user.name`. A folder that isn't empty is left alone unless you add `--force`.
 

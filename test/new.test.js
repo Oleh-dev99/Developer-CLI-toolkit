@@ -95,12 +95,19 @@ test("a folder with only .git in it counts as empty", async (t) => {
   );
 });
 
-test("an unknown template, an invalid name or a file as the target is an error", async (t) => {
+test("no template, an unknown one, an invalid name or a file as the target is an error", async (t) => {
   const cwd = makeTree(t, { "a-file.txt": "" });
 
   const unknown = await runCli(["new", "nope", "x"], { cwd });
   assert.equal(unknown.code, 1);
-  assert.equal(unknown.stderr, 'error: there\'s no template named "nope"; built-in templates: node-cli\n');
+  assert.equal(unknown.stderr, 'error: there\'s no template named "nope"; see "toolsmith new --list"\n');
+
+  const missing = await runCli(["new"], { cwd });
+  assert.equal(missing.code, 1);
+  assert.equal(
+    missing.stderr,
+    'error: choose a template, like "toolsmith new node-cli my-project"; see "toolsmith new --list"\n',
+  );
 
   const badName = await runCli(["new", "node-cli", "x", "--name", "a/b", "--author", "x"], { cwd });
   assert.equal(badName.code, 1);

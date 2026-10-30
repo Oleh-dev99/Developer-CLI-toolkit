@@ -1,4 +1,4 @@
-import { readdirSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { lstat, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { userInfo } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
@@ -12,7 +12,7 @@ const templatesFolder = fileURLToPath(new URL("../../templates/", import.meta.ur
 
 // npm leaves files like .gitignore out of published packages, so templates
 // store them under these names, and they get their real names in the project.
-const dotfiles = new Map([
+export const dotfiles = new Map([
   ["_editorconfig", ".editorconfig"],
   ["_gitattributes", ".gitattributes"],
   ["_gitignore", ".gitignore"],
@@ -23,15 +23,19 @@ export function register(program) {
   program
     .command("new")
     .description("create a project from a template")
-    .argument("<template>", "the template to start from, like node-cli")
+    .argument("[template]", "the template to start from, like node-cli")
     .argument("[directory]", "the folder to create the project in (default: the current folder)")
+    .option("--list", "show the built-in templates")
     .option("--name <name>", "the project name (default: the folder's name)")
     .option("--author <name>", "the author (default: your git user.name)")
     .option("--force", "write into a folder that isn't empty, replacing files with the same names")
     .addHelpText(
       "after",
-      () => `
+      `
 Examples:
+  See the built-in templates:
+  $ toolsmith new --list
+
   Create the folder my-tool from the node-cli template:
   $ toolsmith new node-cli my-tool
 
@@ -39,9 +43,16 @@ Examples:
   $ toolsmith new node-cli --force --author "Ada Lovelace"
 
 Templates can use {{name}}, {{author}} and {{year}} in file contents and in
-file and folder names. Built-in templates: ${builtInTemplates().join(", ")}.`,
+file and folder names.`,
     )
     .action(async (template, directory = ".", options) => {
+      if (options.list) {
+        printTemplates();
+        return;
+      }
+      if (!template) {
+        throw new Error('choose a template, like "toolsmith new node-cli my-project"; see "toolsmith new --list"');
+      }
       const source = templateFolder(template);
       const target = resolve(directory);
       const where = displayPath(target) || "the current folder";
@@ -70,12 +81,29 @@ function builtInTemplates() {
     .sort();
 }
 
+// Each template folder has a template.json with a one-line "description". That
+// file describes the template, so it isn't copied into projects.
+function templateDescription(name) {
+  try {
+    return JSON.parse(readFileSync(join(templatesFolder, name, "template.json"), "utf8")).description ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function printTemplates() {
+  const names = builtInTemplates();
+  const width = names.reduce((max, name) => Math.max(max, name.length), 0);
+  for (const name of names) {
+    console.log(`${name.padEnd(width)}  ${templateDescription(name)}`.trimEnd());
+  }
+}
+
 // Checking against the list also keeps a name like "../x" from reaching
 // outside the templates folder.
 function templateFolder(name) {
-  const names = builtInTemplates();
-  if (!names.includes(name)) {
-    throw new Error(`there's no template named "${name}"; built-in templates: ${names.join(", ")}`);
+  if (!builtInTemplates().includes(name)) {
+    throw new Error(`there's no template named "${name}"; see "toolsmith new --list"`);
   }
   return join(templatesFolder, name);
 }
@@ -127,7 +155,7 @@ async function generate(source, target, values) {
 
   const plan = [];
   for await (const entry of walk(source)) {
-    if (entry.type !== "file" && entry.type !== "directory") {
+    if ((entry.type !== "file" && entry.type !== "directory") || entry.relativePath === "template.json") {
       continue;
     }
     const parts = entry.relativePath.split("/").map((part) => dotfiles.get(part) ?? fill(part));

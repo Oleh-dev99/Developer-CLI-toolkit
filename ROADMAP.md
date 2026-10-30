@@ -114,14 +114,14 @@ toolsmith is being built in twelve milestones. M1 is the foundation that every l
 **Goal:** `toolsmith new <template>` creates a ready-to-run project in one command.
 
 - [x] `toolsmith new <template> [directory]` creates a project from a template
-- [ ] A few built-in templates to start with (e.g. Node.js CLI, Node.js library); `toolsmith new --list` shows them with descriptions
+- [x] A few built-in templates to start with (e.g. Node.js CLI, Node.js library); `toolsmith new --list` shows them with descriptions
 - [x] Placeholders such as `{{name}}`, `{{author}}` and `{{year}}`, replaced in file contents and file names
 - [ ] Ask for missing values; `--yes` accepts the defaults so it can run unattended
 - [x] Refuse to write into a non-empty directory unless `--force` is given
 - [ ] Finish with `git init` and `npm install` (skip with `--no-git` / `--no-install`)
 - [x] Store dotfiles such as `.gitignore` as `_gitignore` in templates and rename them while generating, because npm leaves `.gitignore` files out of published packages
 - [ ] Use your own templates from a local folder or a git repository URL
-- [ ] Tests generate every built-in template into a temporary directory and check the result
+- [x] Tests generate every built-in template into a temporary directory and check the result
 
 ## M5 — Plugin system
 
