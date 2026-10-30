@@ -3,6 +3,7 @@ import { inspect } from "node:util";
 import { Command } from "commander";
 import * as configCommand from "./commands/config.js";
 import * as dupesCommand from "./commands/dupes.js";
+import * as gitCommand from "./commands/git/index.js";
 import * as helloCommand from "./commands/hello.js";
 import * as renameCommand from "./commands/rename.js";
 import * as sizeCommand from "./commands/size.js";
@@ -12,7 +13,7 @@ import { disableColor, error, warn } from "./output.js";
 const { version } = createRequire(import.meta.url)("../package.json");
 
 // Each command module exports register(program, context).
-const commands = [configCommand, dupesCommand, helloCommand, renameCommand, sizeCommand];
+const commands = [configCommand, dupesCommand, gitCommand, helloCommand, renameCommand, sizeCommand];
 
 export async function run(argv) {
   // Read the config file before parsing, so "color": false also covers usage

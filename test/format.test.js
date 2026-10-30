@@ -6,6 +6,7 @@ test("count adds an s for anything but one", () => {
   assert.equal(count(1, "file"), "1 file");
   assert.equal(count(0, "file"), "0 files");
   assert.equal(count(3, "file"), "3 files");
+  assert.equal(count(2, "branch", "branches"), "2 branches");
 });
 
 test("formatSize uses B, KB, MB, … with 1 KB = 1024 bytes", () => {

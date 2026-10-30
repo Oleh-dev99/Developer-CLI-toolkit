@@ -1,9 +1,10 @@
 // Sizes use 1 KB = 1024 bytes, like Windows Explorer and `du -h`.
 const units = ["B", "KB", "MB", "GB", "TB"];
 
-// "1 file", "3 files".
-export function count(n, word) {
-  return `${n} ${word}${n === 1 ? "" : "s"}`;
+// "1 file", "3 files"; pass the plural when it isn't just an added "s":
+// count(2, "branch", "branches").
+export function count(n, word, plural = `${word}s`) {
+  return `${n} ${n === 1 ? word : plural}`;
 }
 
 // 1536 → "1.5 KB", 460800 → "450 KB".

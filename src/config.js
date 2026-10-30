@@ -2,7 +2,11 @@ import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 
-const defaults = { color: true, greeting: "Hello" };
+const defaults = {
+  color: true,
+  greeting: "Hello",
+  protectedBranches: ["main", "master", "develop"],
+};
 
 // Reads ~/.toolsmithrc (or the file named by TOOLSMITH_CONFIG) and merges it
 // over the defaults. A missing file means defaults; an unusable one throws.
@@ -36,15 +40,24 @@ export function loadConfig() {
   for (const [key, value] of Object.entries(data)) {
     if (!Object.hasOwn(defaults, key)) {
       warnings.push(`unknown setting "${key}" in config file ${path} (ignored)`);
-    } else if (typeof value !== typeof defaults[key]) {
+    } else if (kindOf(value) !== kindOf(defaults[key])) {
       throw new Error(
-        `"${key}" in config file ${path} must be a ${typeof defaults[key]}, got ${JSON.stringify(value)}`,
+        `"${key}" in config file ${path} must be a ${kindOf(defaults[key])}, got ${JSON.stringify(value)}`,
       );
     } else {
       settings[key] = value;
     }
   }
   return { path, found: true, settings, warnings };
+}
+
+// "boolean", "string", "list of strings", …: what a setting must be, in words
+// that also work in error messages.
+function kindOf(value) {
+  if (Array.isArray(value)) {
+    return value.every((item) => typeof item === "string") ? "list of strings" : "list";
+  }
+  return value === null ? "null" : typeof value;
 }
 
 // Windows PowerShell 5.1 saves UTF-16 with ">" and Out-File, and UTF-8 with a

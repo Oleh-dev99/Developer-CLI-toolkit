@@ -1,3 +1,4 @@
+import { createInterface } from "node:readline";
 import { styleText } from "node:util";
 
 // Messages for the user: success() and info() go to stdout, warn() and
@@ -31,4 +32,24 @@ export function warn(message) {
 
 export function error(message) {
   console.error(paint("red", `error: ${message}`, process.stderr));
+}
+
+// Asks a yes/no question on stderr and reads the answer from stdin. Only "y" or
+// "yes" counts as yes; input that ends without an answer is a no.
+export function confirm(question) {
+  return new Promise((resolve) => {
+    const prompt = createInterface({ input: process.stdin, output: process.stderr });
+    let answered = false;
+    prompt.question(question, (answer) => {
+      answered = true;
+      prompt.close();
+      resolve(/^y(es)?$/i.test(answer.trim()));
+    });
+    prompt.on("close", () => {
+      if (!answered) {
+        process.stderr.write("\n");
+        resolve(false);
+      }
+    });
+  });
 }

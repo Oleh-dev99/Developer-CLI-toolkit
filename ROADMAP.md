@@ -85,15 +85,15 @@ toolsmith is being built in twelve milestones. M1 is the foundation that every l
 
 ### Shared
 
-- [ ] All helpers live under `toolsmith git <command>`
-- [ ] Run the `git` executable without a shell (so branch names can't inject commands), with clear errors when git isn't installed or the folder isn't a repository
-- [ ] Tests run against throwaway repositories created in a temporary directory
+- [x] All helpers live under `toolsmith git <command>`
+- [x] Run the `git` executable without a shell (so branch names can't inject commands), with clear errors when git isn't installed or the folder isn't a repository
+- [x] Tests run against throwaway repositories created in a temporary directory
 
 ### Clean merged branches — `toolsmith git clean-branches`
 
-- [ ] List local branches already merged into the base branch (`main` or `master`, detected automatically; `--base` to override)
+- [x] List local branches already merged into the base branch (`main` or `master`, detected automatically; `--base` to override)
 - [ ] Also find squash-merged branches, which `git branch --merged` misses
-- [ ] Never delete the current branch, the base branch, or protected branches listed in `~/.toolsmithrc`
+- [x] Never delete the current branch, the base branch, or protected branches listed in `~/.toolsmithrc`
 - [ ] Opt-in `--remote` also deletes the merged branches on `origin`, after a separate confirmation
 
 ### Recent-commits summary — `toolsmith git recent`
