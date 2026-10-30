@@ -40,14 +40,19 @@ export function promptStreams(answers) {
 // TOOLSMITH_CONFIG always points to a temp path, so the real ~/.toolsmithrc is
 // never read, and NO_COLOR=1 is set unless a test overrides it. The fake npm
 // comes first on the PATH, so tests never run the real npm (or download
-// anything). Set a variable to undefined in `env` to remove it, and PATH to
-// replace the whole PATH. `cwd` sets the folder the CLI runs in, and `input` is
-// typed into the CLI (otherwise its input is empty).
+// anything). npm_config_prefix, where global plugins are looked for, points to
+// a temp path too, unless a test sets it. Set a variable to undefined in `env`
+// to remove it, and PATH to replace the whole PATH. `cwd` sets the folder the
+// CLI runs in, and `input` is typed into the CLI (otherwise its input is
+// empty).
 export function runCli(args, { env = {}, cwd, input } = {}) {
   const childEnv = {};
   for (const [key, value] of Object.entries(process.env)) {
-    // Windows spells it "Path"; one spelling lets `env` replace it.
-    childEnv[key.toUpperCase() === "PATH" ? "PATH" : key] = value;
+    // Windows spells it "Path"; one spelling lets `env` replace it. npm's
+    // prefix may come in any case, so any spelling of it is dropped.
+    if (key.toLowerCase() !== "npm_config_prefix") {
+      childEnv[key.toUpperCase() === "PATH" ? "PATH" : key] = value;
+    }
   }
   childEnv.PATH = [fakeNpmFolder, childEnv.PATH].filter(Boolean).join(delimiter);
   // The test runner sets FORCE_COLOR for test files when the terminal has
@@ -57,6 +62,7 @@ export function runCli(args, { env = {}, cwd, input } = {}) {
   childEnv.NO_COLOR = "1";
   Object.assign(childEnv, env);
   childEnv.TOOLSMITH_CONFIG ||= join(tmpdir(), `toolsmith-no-config-${randomUUID()}.json`);
+  childEnv.npm_config_prefix ||= join(tmpdir(), `toolsmith-no-npm-prefix-${randomUUID()}`);
 
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [bin, ...args], {

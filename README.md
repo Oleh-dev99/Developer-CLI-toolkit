@@ -91,6 +91,52 @@ toolsmith git template unset              # stop using it
 }
 ```
 
+## Plugins
+
+Plugins add commands to toolsmith. A plugin is an npm package named `toolsmith-plugin-<something>` or `@scope/toolsmith-plugin-<something>`, and toolsmith finds it where npm installs it:
+
+```sh
+npm install --save-dev toolsmith-plugin-deploy    # for one project
+npm install --global toolsmith-plugin-deploy      # for every project
+toolsmith deploy --help                           # the plugin's command, like any other
+```
+
+Project plugins are found in the `node_modules` folder of the current folder or any folder above it, as Node.js finds packages. Global plugins are found in the `node_modules` folder that toolsmith itself is installed in, and in npm's global folder (from `npm_config_prefix`, or else the default next to Node.js). When a plugin is installed in both places, the project's copy is used.
+
+To turn a plugin off, set it to `false` in `~/.toolsmithrc`; a plugin that's turned off isn't loaded at all:
+
+```json
+{
+  "plugins": {
+    "toolsmith-plugin-deploy": false
+  }
+}
+```
+
+A plugin that fails to load is skipped with a warning, and the rest of toolsmith works as usual. Built-in commands always win: a plugin command with the same name as one of them, or as a command another plugin already added, is skipped with a warning.
+
+> **Only install plugins you trust.** A plugin is a program that runs with your full user permissions, like anything else you install with npm: it can read and change your files and use your network. A project's plugins run whenever you use toolsmith in that project, so check what a project installs before you run toolsmith in it.
+
+### Writing a plugin
+
+A plugin's main file exports a `register(api)` function, where `api.command()` adds a command and returns a [Commander](https://github.com/tj/commander.js) command to describe:
+
+```js
+// index.js of the package toolsmith-plugin-shout
+export function register(api) {
+  api
+    .command("shout")
+    .description("print a greeting in capitals")
+    .argument("[name]", "who to greet", "world")
+    .action((name) => {
+      const { greeting } = api.config.settings;
+      api.output.success(`${greeting}, ${name}!`.toUpperCase());
+    });
+}
+```
+
+`api.config` holds the settings from `~/.toolsmithrc`, as `toolsmith config` shows them; read it inside an action. `api.output` has toolsmith's `success`, `info`, `warn` and `error` helpers, which follow its color settings, and `api.version` is toolsmith's version. Both ES modules and CommonJS (`module.exports = { register }`) work.
+
 ## Roadmap
 
 toolsmith is being built in twelve milestones, from the core command framework (M1) to shell integration and self-update (M12). See [ROADMAP.md](ROADMAP.md) for each milestone's goal and task checklist.

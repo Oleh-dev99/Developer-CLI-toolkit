@@ -10,6 +10,7 @@ import * as renameCommand from "./commands/rename.js";
 import * as sizeCommand from "./commands/size.js";
 import { loadConfig } from "./config.js";
 import { disableColor, error, warn } from "./output.js";
+import { loadPlugins } from "./plugins.js";
 
 const { version } = createRequire(import.meta.url)("../package.json");
 
@@ -65,6 +66,11 @@ export async function run(argv) {
 
   for (const command of commands) {
     command.register(program, context);
+  }
+  // Plugins load only with a config file that could be read, because it may
+  // turn some of them off.
+  if (config) {
+    await loadPlugins(program, context, { enabled: config.settings.plugins, version });
   }
 
   // Commander reports usage errors (like an unknown command) itself and exits

@@ -8,6 +8,18 @@ const defaults = {
   protectedBranches: ["main", "master", "develop"],
   // Commit message templates for `toolsmith git template`, by name.
   templates: {},
+  // Plugins turned on (true) or off (false), by package name; on by default.
+  plugins: {},
+};
+
+// What each setting must be, in words that also work in error messages. An
+// empty default like {} can't say this itself.
+const kinds = {
+  color: "boolean",
+  greeting: "string",
+  protectedBranches: "list of strings",
+  templates: "map of names to text",
+  plugins: "map of names to true/false",
 };
 
 // Reads ~/.toolsmithrc (or the file named by TOOLSMITH_CONFIG) and merges it
@@ -42,10 +54,8 @@ export function loadConfig() {
   for (const [key, value] of Object.entries(data)) {
     if (!Object.hasOwn(defaults, key)) {
       warnings.push(`unknown setting "${key}" in config file ${path} (ignored)`);
-    } else if (kindOf(value) !== kindOf(defaults[key])) {
-      throw new Error(
-        `"${key}" in config file ${path} must be a ${kindOf(defaults[key])}, got ${JSON.stringify(value)}`,
-      );
+    } else if (!isKind(value, kinds[key])) {
+      throw new Error(`"${key}" in config file ${path} must be a ${kinds[key]}, got ${JSON.stringify(value)}`);
     } else {
       settings[key] = value;
     }
@@ -53,17 +63,19 @@ export function loadConfig() {
   return { path, found: true, settings, warnings };
 }
 
-// "boolean", "string", "list of strings", "map of names to text", …: what a
-// setting must be, in words that also work in error messages.
-function kindOf(value) {
-  const isText = (item) => typeof item === "string";
-  if (Array.isArray(value)) {
-    return value.every(isText) ? "list of strings" : "list";
+// Whether `value` is of `kind`, one of the words in `kinds`.
+function isKind(value, kind) {
+  const isMap = value !== null && typeof value === "object" && !Array.isArray(value);
+  switch (kind) {
+    case "list of strings":
+      return Array.isArray(value) && value.every((item) => typeof item === "string");
+    case "map of names to text":
+      return isMap && Object.values(value).every((item) => typeof item === "string");
+    case "map of names to true/false":
+      return isMap && Object.values(value).every((item) => typeof item === "boolean");
+    default:
+      return typeof value === kind;
   }
-  if (value !== null && typeof value === "object") {
-    return Object.values(value).every(isText) ? "map of names to text" : "map";
-  }
-  return value === null ? "null" : typeof value;
 }
 
 // Windows PowerShell 5.1 saves UTF-16 with ">" and Out-File, and UTF-8 with a

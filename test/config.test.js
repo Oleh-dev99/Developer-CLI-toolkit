@@ -17,7 +17,7 @@ test("a missing config file means defaults, silently", async (t) => {
   assert.equal(
     stdout,
     `Config file: none, using defaults (no file at ${path})\nSettings:\n  color: true\n  greeting: "Hello"\n` +
-      `  protectedBranches: ["main","master","develop"]\n  templates: {}\n`,
+      `  protectedBranches: ["main","master","develop"]\n  templates: {}\n  plugins: {}\n`,
   );
 });
 
@@ -31,7 +31,7 @@ test("a valid config file is used", async (t) => {
   assert.equal(
     config.stdout,
     `Config file: ${path}\nSettings:\n  color: true\n  greeting: "Hi"\n  protectedBranches: ["main","master","develop"]\n` +
-      "  templates: {}\n",
+      "  templates: {}\n  plugins: {}\n",
   );
 
   const hello = await runCli(["hello", "Ada"], { env });
@@ -66,6 +66,16 @@ test("a map setting must map names to text", async (t) => {
   const { stderr, code } = await runCli(["config"], { env: { TOOLSMITH_CONFIG: path } });
   assert.equal(code, 1);
   assert.equal(stderr, `error: "templates" in config file ${path} must be a map of names to text, got {"team":1}\n`);
+});
+
+test("the plugins setting must map names to true or false", async (t) => {
+  const path = writeTempConfig(t, '{"plugins": {"toolsmith-plugin-x": "off"}}');
+  const { stderr, code } = await runCli(["config"], { env: { TOOLSMITH_CONFIG: path } });
+  assert.equal(code, 1);
+  assert.equal(
+    stderr,
+    `error: "plugins" in config file ${path} must be a map of names to true/false, got {"toolsmith-plugin-x":"off"}\n`,
+  );
 });
 
 test("a config file that isn't a JSON object is an error", async (t) => {
