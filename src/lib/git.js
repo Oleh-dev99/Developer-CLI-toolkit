@@ -9,9 +9,14 @@ const gitEnv = { ...process.env, LC_ALL: "C" };
 // Runs git with `args` and returns its output. git is started directly, without
 // a shell, so arguments such as branch names can never run other commands. A
 // failure throws an error with git's message, its `exitCode` and `stderr`.
-export async function git(args, { cwd = process.cwd() } = {}) {
+// `env` adds environment variables for this one call.
+export async function git(args, { cwd = process.cwd(), env } = {}) {
   try {
-    const { stdout } = await execFileAsync("git", args, { cwd, env: gitEnv, maxBuffer: 64 * 1024 * 1024 });
+    const { stdout } = await execFileAsync("git", args, {
+      cwd,
+      env: { ...gitEnv, ...env },
+      maxBuffer: 64 * 1024 * 1024,
+    });
     return stdout.trimEnd();
   } catch (err) {
     if (err.code === "ENOENT") {

@@ -34,22 +34,30 @@ export function error(message) {
   console.error(paint("red", `error: ${message}`, process.stderr));
 }
 
-// Asks a yes/no question on stderr and reads the answer from stdin. Only "y" or
-// "yes" counts as yes; input that ends without an answer is a no.
-export function confirm(question) {
-  return new Promise((resolve) => {
-    const prompt = createInterface({ input: process.stdin, output: process.stderr });
-    let answered = false;
-    prompt.question(question, (answer) => {
-      answered = true;
-      prompt.close();
-      resolve(/^y(es)?$/i.test(answer.trim()));
-    });
-    prompt.on("close", () => {
-      if (!answered) {
-        process.stderr.write("\n");
-        resolve(false);
+// Asks yes/no questions: confirm(question) writes the question to stderr and
+// reads one answer line from stdin. Only "y" or "yes" counts as yes; input that
+// ends without an answer is a no. All answers come from one reader, so several
+// piped answers ("y\nn\n") reach the right questions. Call close() when done,
+// or the open input keeps the program running.
+export function prompter() {
+  let reader;
+  let lines;
+  return {
+    async confirm(question) {
+      process.stderr.write(question);
+      if (!reader) {
+        reader = createInterface({ input: process.stdin, crlfDelay: Infinity });
+        lines = reader[Symbol.asyncIterator]();
       }
-    });
-  });
+      const { value, done } = await lines.next();
+      if (done) {
+        process.stderr.write("\n");
+        return false;
+      }
+      return /^y(es)?$/i.test(value.trim());
+    },
+    close() {
+      reader?.close();
+    },
+  };
 }

@@ -92,9 +92,9 @@ toolsmith is being built in twelve milestones. M1 is the foundation that every l
 ### Clean merged branches — `toolsmith git clean-branches`
 
 - [x] List local branches already merged into the base branch (`main` or `master`, detected automatically; `--base` to override)
-- [ ] Also find squash-merged branches, which `git branch --merged` misses
+- [x] Also find squash-merged branches, which `git branch --merged` misses
 - [x] Never delete the current branch, the base branch, or protected branches listed in `~/.toolsmithrc`
-- [ ] Opt-in `--remote` also deletes the merged branches on `origin`, after a separate confirmation
+- [x] Opt-in `--remote` also deletes the merged branches on `origin`, after a separate confirmation
 
 ### Recent-commits summary — `toolsmith git recent`
 
