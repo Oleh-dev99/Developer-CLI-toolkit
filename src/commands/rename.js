@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { lstat, readdir, rename } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
-import { displayPath, findFiles } from "../lib/files.js";
+import { displayPath, findFiles, isValidFileName } from "../lib/files.js";
 import { count } from "../lib/format.js";
 import { info, success } from "../output.js";
 
@@ -128,7 +128,7 @@ async function findConflicts(plan) {
   for (const group of byTarget.values()) {
     const { to, newName, caseOnly } = group[0];
     const from = group.map((step) => displayPath(step.from)).join(", ");
-    if (!isValidName(newName)) {
+    if (!isValidFileName(newName)) {
       conflicts.push(`${from} → "${newName}": not a valid file name`);
     } else if (group.length > 1) {
       conflicts.push(`${from} → ${displayPath(to)}: would get the same name`);
@@ -155,14 +155,6 @@ async function renameViaTemp(from, to) {
     }
     throw err;
   }
-}
-
-function isValidName(name) {
-  if (name === "" || name === "." || name === ".." || /[/\0]/.test(name)) {
-    return false;
-  }
-  // Windows also forbids these characters, and names ending in a dot or space.
-  return process.platform !== "win32" || !/[\\<>:"|?*\x00-\x1f]|[. ]$/.test(name);
 }
 
 function exists(path) {

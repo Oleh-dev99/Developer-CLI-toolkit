@@ -25,6 +25,18 @@ npm link
 toolsmith --help
 ```
 
+### Create a project from a template
+
+`toolsmith new` copies a template into a folder and fills in `{{name}}`, `{{author}}` and `{{year}}`, in file contents and file names:
+
+```sh
+toolsmith new node-cli my-tool                     # creates my-tool/
+toolsmith new node-cli my-tool --author "Ada Lovelace"
+toolsmith new node-cli --force                     # into the current folder, even if it has files
+```
+
+The name defaults to the folder's name and the author to your git `user.name`. A folder that isn't empty is left alone unless you add `--force`.
+
 ### Commit message templates
 
 `toolsmith git template` makes `git commit` start from a ready-made message, one repository at a time:

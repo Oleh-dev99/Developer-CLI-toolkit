@@ -80,6 +80,16 @@ async function expandGlob(pattern, recursive) {
   return matches;
 }
 
+// Whether `name` works as a single file or folder name on this system: not
+// empty, not "." or "..", and no "/" (which would point into another folder).
+export function isValidFileName(name) {
+  if (name === "" || name === "." || name === ".." || /[/\0]/.test(name)) {
+    return false;
+  }
+  // Windows also forbids these characters, and names ending in a dot or space.
+  return process.platform !== "win32" || !/[\\<>:"|?*\x00-\x1f]|[. ]$/.test(name);
+}
+
 // Paths inside the current folder are shown relative to it, with "/".
 export function displayPath(path) {
   const relativePath = relative(process.cwd(), path);
