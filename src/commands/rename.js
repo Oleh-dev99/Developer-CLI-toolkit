@@ -1,11 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { lstat, readdir, rename } from "node:fs/promises";
-import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
-import picomatch from "picomatch";
-import { walk } from "../lib/walk.js";
-import { info, success, warn } from "../output.js";
-
-const skipFolders = [".git", "node_modules"];
+import { basename, dirname, join } from "node:path";
+import { displayPath, findFiles } from "../lib/files.js";
+import { count } from "../lib/format.js";
+import { info, success } from "../output.js";
 
 export function register(program) {
   program
@@ -41,12 +39,12 @@ leaves it alone.`,
     )
     .action(async (find, replace, paths, options) => {
       const newNameFor = nameReplacer(find, replace, options.regex);
-      const files = await findFiles(paths.length > 0 ? paths : ["."], options.recursive);
+      const files = await findFiles(paths.length > 0 ? paths : ["."], { recursive: options.recursive });
 
       // Plan every rename before touching anything.
       const ignoresCase = folderCaseChecker();
       const plan = [];
-      for (const from of files) {
+      for (const { path: from } of files) {
         const name = basename(from);
         const newName = newNameFor(name);
         if (newName !== name) {
@@ -76,7 +74,7 @@ leaves it alone.`,
           await (caseOnly ? renameViaTemp(from, to) : rename(from, to));
         } catch (err) {
           throw new Error(
-            `couldn't rename ${show(from)} (${err.message}); ${done} of ${plan.length} were renamed before that`,
+            `couldn't rename ${displayPath(from)} (${err.message}); ${done} of ${plan.length} were renamed before that`,
           );
         }
       }
@@ -94,58 +92,6 @@ function nameReplacer(find, replace, regex) {
   }
   // A function as the replacement keeps "$" in plain text literal.
   return (name) => name.replaceAll(find, () => replace);
-}
-
-// Each path is a file, a folder, or a glob pattern. A path that exists is used
-// as it is, even if it looks like a pattern (such as "photo[1].jpg").
-async function findFiles(paths, recursive) {
-  const files = new Set();
-  for (const path of paths) {
-    const stats = await lstat(path).catch(() => null);
-    if (stats?.isFile()) {
-      files.add(resolve(path));
-    } else if (stats?.isDirectory()) {
-      for await (const entry of walk(path, { recursive, ignore: skipFolders })) {
-        if (entry.type === "file") {
-          files.add(entry.path);
-        }
-      }
-    } else if (!stats && picomatch.scan(path).isGlob) {
-      const matches = await expandGlob(path, recursive);
-      if (matches.length === 0) {
-        warn(`no files match ${path}`);
-      }
-      for (const match of matches) {
-        files.add(match);
-      }
-    } else if (!stats) {
-      throw new Error(`${path} not found`);
-    }
-  }
-  return [...files];
-}
-
-// Expands a pattern like "*.jpg" or "photos/**/*.png" from the current folder.
-// Shells on Windows don't do this, so toolsmith does it the same way everywhere.
-async function expandGlob(pattern, recursive) {
-  // In a glob "\" escapes the next character, but on Windows it's a separator.
-  const slashed = process.platform === "win32" ? pattern.replaceAll("\\", "/") : pattern;
-  const { base, glob } = picomatch.scan(slashed);
-  const fullGlob = recursive && !glob.includes("/") ? `**/${glob}` : glob;
-  const isMatch = picomatch(fullGlob);
-  const maxDepth = fullGlob.includes("**") ? Infinity : fullGlob.split("/").length;
-
-  const matches = [];
-  try {
-    for await (const entry of walk(base || ".", { maxDepth, ignore: skipFolders })) {
-      if (entry.type === "file" && isMatch(entry.relativePath)) {
-        matches.push(entry.path);
-      }
-    }
-  } catch {
-    // The folder in front of the pattern doesn't exist, so nothing matches.
-  }
-  return matches;
 }
 
 // Returns a function that tells, per folder, whether the file system there
@@ -181,14 +127,14 @@ async function findConflicts(plan) {
   const conflicts = [];
   for (const group of byTarget.values()) {
     const { to, newName, caseOnly } = group[0];
-    const from = group.map((step) => show(step.from)).join(", ");
+    const from = group.map((step) => displayPath(step.from)).join(", ");
     if (!isValidName(newName)) {
       conflicts.push(`${from} → "${newName}": not a valid file name`);
     } else if (group.length > 1) {
-      conflicts.push(`${from} → ${show(to)}: would get the same name`);
+      conflicts.push(`${from} → ${displayPath(to)}: would get the same name`);
     } else if (!caseOnly && (await exists(to))) {
       // After a case-only change the "existing" target is the file itself.
-      conflicts.push(`${from} → ${show(to)}: ${show(to)} already exists`);
+      conflicts.push(`${from} → ${displayPath(to)}: ${displayPath(to)} already exists`);
     }
   }
   return conflicts;
@@ -227,21 +173,9 @@ function exists(path) {
 }
 
 function printTable(plan) {
-  const rows = plan.map(({ from, to }) => [show(from), show(to)]);
+  const rows = plan.map(({ from, to }) => [displayPath(from), displayPath(to)]);
   const width = rows.reduce((max, [from]) => Math.max(max, from.length), 0);
   for (const [from, to] of rows) {
     console.log(`${from.padEnd(width)} → ${to}`);
   }
-}
-
-// Paths inside the current folder are shown relative to it, with "/".
-function show(path) {
-  const relativePath = relative(process.cwd(), path);
-  return relativePath.startsWith("..") || isAbsolute(relativePath)
-    ? path
-    : relativePath.split(sep).join("/");
-}
-
-function count(n, word) {
-  return `${n} ${word}${n === 1 ? "" : "s"}`;
 }

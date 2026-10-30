@@ -69,9 +69,9 @@ toolsmith is being built in twelve milestones. M1 is the foundation that every l
 
 ### Find duplicates — `toolsmith dupes`
 
-- [ ] Find files with identical content: group by size first, then hash only same-size files, streaming so large files don't fill memory
-- [ ] Report each group of duplicates and the total space they waste (report only, no deleting)
-- [ ] Skip `.git` and `node_modules` by default; `--min-size` ignores small files
+- [x] Find files with identical content: group by size first, then hash only same-size files, streaming so large files don't fill memory
+- [x] Report each group of duplicates and the total space they waste (report only, no deleting)
+- [x] Skip `.git` and `node_modules` by default; `--min-size` ignores small files
 
 ### Folder size report — `toolsmith size`
 

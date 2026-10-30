@@ -35,7 +35,7 @@ export async function* walk(root, { recursive = true, maxDepth = Infinity, ignor
         try {
           size = (await lstat(path)).size;
         } catch (err) {
-          warn(`skipped ${path} (${reason(err)})`);
+          warn(`skipped ${path} (${fsErrorReason(err)})`);
           continue;
         }
       }
@@ -46,7 +46,7 @@ export async function* walk(root, { recursive = true, maxDepth = Infinity, ignor
         try {
           children = await readFolder(path);
         } catch (err) {
-          warn(`skipped ${path} (${reason(err)})`);
+          warn(`skipped ${path} (${fsErrorReason(err)})`);
           continue;
         }
         yield* walkFolder(path, relativePath, children, depth + 1);
@@ -59,7 +59,7 @@ export async function* walk(root, { recursive = true, maxDepth = Infinity, ignor
   try {
     rootEntries = await readFolder(rootPath);
   } catch (err) {
-    throw new Error(`can't read folder ${rootPath} (${reason(err)})`);
+    throw new Error(`can't read folder ${rootPath} (${fsErrorReason(err)})`);
   }
   yield* walkFolder(rootPath, "", rootEntries, 1);
 }
@@ -95,11 +95,13 @@ function typeOf(dirent) {
 
 const reasons = {
   EACCES: "permission denied",
+  EBUSY: "in use by another program",
   EPERM: "permission denied",
   ENOENT: "not found",
   ENOTDIR: "not a folder",
 };
 
-function reason(err) {
+// A short, readable reason for a file system error, like "permission denied".
+export function fsErrorReason(err) {
   return reasons[err.code] ?? err.message;
 }
