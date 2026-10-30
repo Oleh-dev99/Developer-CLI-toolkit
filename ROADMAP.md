@@ -56,8 +56,8 @@ toolsmith is being built in twelve milestones. M1 is the foundation that every l
 
 ### Shared
 
-- [ ] One directory walker for all file tools: ignore patterns, doesn't follow symlinks (so loops can't hang a scan), reports unreadable files as warnings instead of crashing
-- [ ] Tests build their fixture folders in a temporary directory
+- [x] One directory walker for all file tools: ignore patterns, doesn't follow symlinks (so loops can't hang a scan), reports unreadable files as warnings instead of crashing
+- [x] Tests build their fixture folders in a temporary directory
 
 ### Bulk rename — `toolsmith rename`
 

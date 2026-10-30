@@ -1,8 +1,8 @@
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const bin = fileURLToPath(new URL("../bin/toolsmith.js", import.meta.url));
@@ -47,4 +47,21 @@ export function writeTempConfig(t, contents) {
   const path = join(tempDir(t), "config.json");
   writeFileSync(path, contents);
   return path;
+}
+
+// Builds a folder tree in a fresh temp folder (deleted after the test) and
+// returns its path. Keys are relative paths: "a/b.txt": "text" creates a file,
+// and a key ending in "/" creates an empty folder.
+export function makeTree(t, tree) {
+  const root = tempDir(t);
+  for (const [path, contents] of Object.entries(tree)) {
+    const fullPath = join(root, path);
+    if (path.endsWith("/")) {
+      mkdirSync(fullPath, { recursive: true });
+    } else {
+      mkdirSync(dirname(fullPath), { recursive: true });
+      writeFileSync(fullPath, contents);
+    }
+  }
+  return root;
 }
