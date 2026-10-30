@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
+import { join } from "node:path";
 import { test } from "node:test";
-import { makeTree, runCli } from "./helpers.js";
+import { hardLinkOrSkip, makeTree, runCli } from "./helpers.js";
 
 test("finds files with identical content, in subfolders too", async (t) => {
   const root = makeTree(t, {
@@ -90,6 +91,23 @@ test("--json prints the groups, most wasted space first, and a summary", async (
     ],
     summary: { checkedFiles: 6, groups: 2, duplicateFiles: 3, wasted: 46 },
   });
+});
+
+test("hard links to the same data count as one file", async (t) => {
+  const root = makeTree(t, { "a.txt": "same", "c.txt": "same" });
+  if (!hardLinkOrSkip(t, join(root, "a.txt"), join(root, "b.txt"))) {
+    return;
+  }
+  // b.txt is a second name for a.txt, so only c.txt is a real copy.
+  const { stdout, code } = await runCli(["dupes"], { cwd: root });
+  assert.equal(code, 0);
+  assert.equal(
+    stdout,
+    "2 identical files, 4 B each (4 B wasted):\n  a.txt\n  c.txt\n\nFound 1 group of identical files: 1 duplicate, 4 B wasted.\n",
+  );
+
+  const linksOnly = await runCli(["dupes", "a.txt", "b.txt"], { cwd: root });
+  assert.equal(linksOnly.stdout, "No duplicate files found among 1 file.\n");
 });
 
 test("says so when there are no duplicates", async (t) => {

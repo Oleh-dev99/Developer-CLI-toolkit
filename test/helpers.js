@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { linkSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -48,6 +48,18 @@ export function writeTempConfig(t, contents) {
   const path = join(tempDir(t), "config.json");
   writeFileSync(path, contents);
   return path;
+}
+
+// Makes `newPath` a hard link to `existing`. If the file system can't do that,
+// the test is skipped and this returns false.
+export function hardLinkOrSkip(t, existing, newPath) {
+  try {
+    linkSync(existing, newPath);
+    return true;
+  } catch (err) {
+    t.skip(`hard links aren't supported here (${err.code})`);
+    return false;
+  }
 }
 
 // Builds a folder tree in a fresh temp folder (deleted after the test) and

@@ -7,7 +7,9 @@ import { warn } from "../output.js";
 // for every file, folder and symlink: sorted by name, each folder right before
 // its contents. `path` is absolute; `relativePath` is relative to `root` and
 // always uses "/". `type` is "file", "directory", "symlink" or "other", and
-// `size` is in bytes (0 for folders).
+// `size` is in bytes (0 for folders). Everything but folders also has `fileId`,
+// which is the same for hard links to the same data, and `links`, the number of
+// such hard links.
 //
 // Options:
 //   recursive  go into subfolders (default: true)
@@ -30,16 +32,16 @@ export async function* walk(root, { recursive = true, maxDepth = Infinity, ignor
       }
       const path = join(folder, dirent.name);
       const type = typeOf(dirent);
-      let size = 0;
+      let details = { size: 0 };
       if (type !== "directory") {
         try {
-          size = (await lstat(path)).size;
+          details = statDetails(await lstat(path, { bigint: true }));
         } catch (err) {
           warn(`skipped ${path} (${fsErrorReason(err)})`);
           continue;
         }
       }
-      yield { path, relativePath, type, size };
+      yield { path, relativePath, type, ...details };
 
       if (type === "directory" && depth < depthLimit) {
         let children;
@@ -100,6 +102,12 @@ const reasons = {
   ENOENT: "not found",
   ENOTDIR: "not a folder",
 };
+
+// Size, identity and hard-link count from lstat(path, { bigint: true }). The
+// bigint form matters: Windows file IDs can be too large for a plain number.
+export function statDetails(stats) {
+  return { size: Number(stats.size), fileId: `${stats.dev}:${stats.ino}`, links: Number(stats.nlink) };
+}
 
 // A short, readable reason for a file system error, like "permission denied".
 export function fsErrorReason(err) {

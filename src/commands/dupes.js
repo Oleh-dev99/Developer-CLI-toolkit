@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { InvalidArgumentError } from "commander";
-import { displayPath, findFiles } from "../lib/files.js";
+import { displayPath, findFiles, withoutHardLinks } from "../lib/files.js";
 import { count, formatSize, parseSize } from "../lib/format.js";
 import { fsErrorReason } from "../lib/walk.js";
 import { info, warn } from "../output.js";
@@ -26,13 +26,13 @@ Examples:
   Only .jpg files (in subfolders too), as JSON for a script:
   $ toolsmith dupes '*.jpg' --json
 
-Files are compared by content (SHA-256), not by name. Empty files, .git and
-node_modules are skipped. Sizes use 1 KB = 1024 bytes. Nothing is deleted.`,
+Files are compared by content (SHA-256), not by name. Hard links to the same
+data count as one file. Empty files, .git and node_modules are skipped. Sizes
+use 1 KB = 1024 bytes. Nothing is deleted.`,
     )
     .action(async (paths, options) => {
-      const files = (await findFiles(paths.length > 0 ? paths : ["."], { recursive: true })).filter(
-        ({ size }) => size > 0 && size >= options.minSize,
-      );
+      const found = await findFiles(paths.length > 0 ? paths : ["."], { recursive: true });
+      const files = withoutHardLinks(found).filter(({ size }) => size > 0 && size >= options.minSize);
       const groups = await findDuplicates(files);
       const summary = {
         checkedFiles: files.length,

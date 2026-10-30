@@ -75,9 +75,9 @@ toolsmith is being built in twelve milestones. M1 is the foundation that every l
 
 ### Folder size report — `toolsmith size`
 
-- [ ] List the biggest folders and files under a path, largest first
-- [ ] Human-readable sizes (KB, MB, GB), `--depth <n>` and `--top <n>`
-- [ ] Show progress during long scans (only when output is a terminal)
+- [x] List the biggest folders and files under a path, largest first
+- [x] Human-readable sizes (KB, MB, GB), `--depth <n>` and `--top <n>`
+- [x] Show progress during long scans (only when output is a terminal)
 
 ## M3 — Git helpers
 
