@@ -48,7 +48,7 @@ toolsmith is being built in twelve milestones. M1 is the foundation that every l
 
 - [x] Run the tests on every push and pull request to `main`
 - [x] Test on Linux, macOS and Windows, with every supported Node.js LTS version (including 22.12, the minimum in `engines`)
-- [ ] Protect `main` so pull requests can only merge when CI passes
+- [x] Protect `main` against deletion and force pushes (requiring CI via pull requests can come later)
 
 ## M2 — File tools
 
