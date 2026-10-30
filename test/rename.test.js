@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readdirSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { makeTree, runCli } from "./helpers.js";
@@ -79,6 +79,71 @@ test("a new name with a path separator is a conflict", async (t) => {
   assert.equal(code, 1);
   assert.equal(stderr, 'error: 1 conflict, nothing was renamed:\n  a_b.txt → "a/b.txt": not a valid file name\n');
   assert.deepEqual(namesIn(root), ["a_b.txt"]);
+});
+
+test("a glob pattern picks files in the current folder", async (t) => {
+  const root = makeTree(t, { "IMG_1.jpg": "", "IMG_2.png": "", "sub/IMG_3.jpg": "" });
+  const { stdout, stderr, code } = await runCli(["rename", "IMG_", "photo_", "*.jpg"], { cwd: root });
+  assert.equal(code, 0);
+  assert.equal(stderr, "");
+  assert.equal(stdout, "IMG_1.jpg → photo_1.jpg\nRenamed 1 file.\n");
+  assert.deepEqual(namesIn(root), ["IMG_2.png", "photo_1.jpg", "sub"]);
+  assert.deepEqual(namesIn(join(root, "sub")), ["IMG_3.jpg"]);
+});
+
+test("a ** pattern includes subfolders", async (t) => {
+  const root = makeTree(t, {
+    "photos/IMG_1.png": "",
+    "photos/IMG_2.jpg": "",
+    "photos/trip/IMG_3.png": "",
+    "other/IMG_4.png": "",
+  });
+  const { stdout, code } = await runCli(["rename", "IMG_", "photo_", "photos/**/*.png"], { cwd: root });
+  assert.equal(code, 0);
+  assert.equal(
+    stdout,
+    `${"photos/IMG_1.png".padEnd(21)} → photos/photo_1.png\n` +
+      "photos/trip/IMG_3.png → photos/trip/photo_3.png\n" +
+      "Renamed 2 files.\n",
+  );
+  assert.deepEqual(namesIn(join(root, "photos")), ["IMG_2.jpg", "photo_1.png", "trip"]);
+  assert.deepEqual(namesIn(join(root, "photos", "trip")), ["photo_3.png"]);
+  assert.deepEqual(namesIn(join(root, "other")), ["IMG_4.png"]);
+});
+
+test("with -r, a pattern without / also matches in subfolders", async (t) => {
+  const root = makeTree(t, { "IMG_1.jpg": "", "sub/IMG_2.jpg": "", "sub/IMG_3.png": "" });
+  const { code } = await runCli(["rename", "-r", "IMG_", "photo_", "*.jpg"], { cwd: root });
+  assert.equal(code, 0);
+  assert.deepEqual(namesIn(root), ["photo_1.jpg", "sub"]);
+  assert.deepEqual(namesIn(join(root, "sub")), ["IMG_3.png", "photo_2.jpg"]);
+});
+
+test("a glob pattern and --regex work together", async (t) => {
+  const root = makeTree(t, { "report-2024.txt": "", "report-2025.md": "" });
+  const { stdout, code } = await runCli(["rename", "--regex", "report-(\\d+)", "$1-report", "*.txt"], { cwd: root });
+  assert.equal(code, 0);
+  assert.equal(stdout, "report-2024.txt → 2024-report.txt\nRenamed 1 file.\n");
+  assert.deepEqual(namesIn(root), ["2024-report.txt", "report-2025.md"]);
+});
+
+test("a pattern that matches nothing prints a warning, and the rest still runs", async (t) => {
+  const root = makeTree(t, { "old.txt": "" });
+  const { stdout, stderr, code } = await runCli(["rename", "old", "new", "*.gif", "*.txt"], { cwd: root });
+  assert.equal(code, 0);
+  assert.equal(stderr, "warning: no files match *.gif\n");
+  assert.equal(stdout, "old.txt → new.txt\nRenamed 1 file.\n");
+});
+
+test("a case-only rename really changes the name on disk", async (t) => {
+  const root = makeTree(t, { "readme.md": "hello" });
+  const { stdout, stderr, code } = await runCli(["rename", "readme", "README"], { cwd: root });
+  assert.equal(code, 0);
+  assert.equal(stderr, "");
+  assert.equal(stdout, "readme.md → README.md\nRenamed 1 file.\n");
+  // readdir shows the name as stored, so this fails if the case didn't change.
+  assert.deepEqual(readdirSync(root), ["README.md"]);
+  assert.equal(readFileSync(join(root, "README.md"), "utf8"), "hello");
 });
 
 test("says so when no file names match", async (t) => {
