@@ -98,10 +98,10 @@ toolsmith is being built in twelve milestones. M1 is the foundation that every l
 
 ### Recent-commits summary — `toolsmith git recent`
 
-- [ ] Summarize commits in a time window or since a tag (`--since "1 week ago"`, `--from v0.1.0`)
-- [ ] Filter by author (`--author`, or `--mine` for your own commits)
-- [ ] Group by author or by Conventional Commits type (feat, fix, docs, …)
-- [ ] Plain-text or Markdown output, ready to paste into a stand-up or release notes
+- [x] Summarize commits in a time window or since a tag (`--since "1 week ago"`, `--from v0.1.0`)
+- [x] Filter by author (`--author`, or `--mine` for your own commits)
+- [x] Group by author or by Conventional Commits type (feat, fix, docs, …)
+- [x] Plain-text or Markdown output, ready to paste into a stand-up or release notes
 
 ### Commit message templates — `toolsmith git template`
 

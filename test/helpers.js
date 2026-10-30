@@ -52,21 +52,41 @@ export function writeTempConfig(t, contents) {
   return path;
 }
 
-// Creates a git repository with one empty commit in a fresh temp folder (deleted
-// after the test). Returns its `dir`, a `git(...args)` function that runs git
-// in it, and the `env` to pass to runCli. user.name and user.email are set in
-// the repository itself, and global and system git settings are shut out, so
-// this works the same on any machine and in CI.
-export function makeRepo(t, { branch = "main" } = {}) {
+// Creates a git repository with one empty commit ("first commit", at `date` if
+// given) in a fresh temp folder (deleted after the test). Returns:
+//   dir     the repository folder
+//   git     git(...args) runs git in it and returns the output
+//   commit  commit(message, { date, author, merge }) makes an empty commit, or
+//           with `merge` merges that branch; `date` is ISO 8601 and `author`
+//           "Name <email>"
+//   env     what to pass to runCli
+// user.name and user.email are set in the repository itself, and global and
+// system git settings are shut out, so this works the same on any machine.
+export function makeRepo(t, { branch = "main", date } = {}) {
   const dir = tempDir(t);
   const env = { GIT_CONFIG_GLOBAL: join(dir, "no-global-config"), GIT_CONFIG_NOSYSTEM: "1" };
-  const git = (...args) =>
-    execFileSync("git", args, { cwd: dir, env: { ...process.env, ...env }, encoding: "utf8" }).trim();
+  const run = (args, extraEnv) =>
+    execFileSync("git", args, { cwd: dir, env: { ...process.env, ...env, ...extraEnv }, encoding: "utf8" }).trim();
+  const git = (...args) => run(args);
+  const commit = (message, { date: at, author, merge } = {}) => {
+    const extraEnv = {};
+    if (at) {
+      Object.assign(extraEnv, { GIT_AUTHOR_DATE: at, GIT_COMMITTER_DATE: at });
+    }
+    if (author) {
+      const [, name, email] = /^(.+) <(.+)>$/.exec(author);
+      Object.assign(extraEnv, { GIT_AUTHOR_NAME: name, GIT_AUTHOR_EMAIL: email });
+    }
+    const args = merge
+      ? ["merge", "--quiet", "--no-ff", "-m", message, merge]
+      : ["commit", "--quiet", "--allow-empty", "-m", message];
+    run(args, extraEnv);
+  };
   git("init", "--quiet", `--initial-branch=${branch}`);
   git("config", "user.name", "Toolsmith Tests");
   git("config", "user.email", "tests@example.com");
-  git("commit", "--quiet", "--allow-empty", "-m", "first commit");
-  return { dir, git, env };
+  commit("first commit", { date });
+  return { dir, git, commit, env };
 }
 
 // Makes `newPath` a hard link to `existing`. If the file system can't do that,
