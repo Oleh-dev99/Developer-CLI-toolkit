@@ -10,7 +10,8 @@ const bin = fileURLToPath(new URL("../bin/toolsmith.js", import.meta.url));
 
 // The fake npm (see fixtures/fake-npm/npm) is in this folder, which runCli puts
 // first on the PATH. It writes its arguments to fake-npm.txt in the folder it
-// runs in, and fails with the exit code in FAKE_NPM_EXIT_CODE if that's set.
+// runs in, and a package-lock.json like npm does, and then fails with the exit
+// code in FAKE_NPM_EXIT_CODE if that's set.
 export const fakeNpmFolder = fileURLToPath(new URL("fixtures/fake-npm", import.meta.url));
 
 // For runCli: makes the CLI believe its input is a terminal, so it asks its

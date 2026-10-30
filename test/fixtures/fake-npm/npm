@@ -1,10 +1,12 @@
 #!/bin/sh
 # A fake npm for the tests: runCli (in ../../helpers.js) puts this folder first
 # on the PATH, so tests never run the real npm. It writes its arguments to
-# fake-npm.txt in the folder it runs in, and fails with the exit code in
-# FAKE_NPM_EXIT_CODE if that's set. npm.cmd does the same on Windows.
+# fake-npm.txt in the folder it runs in, and a package-lock.json like npm does,
+# and then fails with the exit code in FAKE_NPM_EXIT_CODE if that's set.
+# npm.cmd does the same on Windows.
 echo "fake npm $*"
 echo "$*" > fake-npm.txt
+echo '{ "fake": true }' > package-lock.json
 if [ -n "$FAKE_NPM_EXIT_CODE" ]; then
   echo "fake npm failed" >&2
   exit "$FAKE_NPM_EXIT_CODE"

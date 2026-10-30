@@ -5,15 +5,21 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { chooseValues } from "../src/commands/new.js";
 import { createPrompt } from "../src/lib/prompt.js";
-import { gitEnv, promptStreams, runCli, tempDir, terminalEnv } from "./helpers.js";
+import { gitEnv, makeTree, promptStreams, runCli, tempDir, terminalEnv } from "./helpers.js";
 
 const templates = readdirSync(fileURLToPath(new URL("../templates/", import.meta.url)), { withFileTypes: true })
   .filter((entry) => entry.isDirectory())
   .map((entry) => entry.name)
   .sort();
-const templateQuestion = `Template (${templates.join(", ")}): `;
+const templateQuestion = `Template (${templates.join(", ")}, a folder or a git URL): `;
 const installQuestion = "Run npm install? [Y/n] ";
 const defaults = { name: "my-folder", author: "Grace Hopper" };
+
+// chooseValues' result, with the template closed and given by its name.
+async function byName(chosen) {
+  await chosen.template.close();
+  return { ...chosen, template: chosen.template.name };
+}
 
 // Runs chooseValues with `answers` typed in. Returns the values it chose and
 // everything it asked.
@@ -21,7 +27,7 @@ async function choose(given, answers) {
   const io = promptStreams(answers);
   const prompt = createPrompt(io);
   try {
-    return { chosen: await chooseValues(given, { defaults, prompt }), asked: io.written() };
+    return { chosen: await byName(await chooseValues(given, { defaults, prompt })), asked: io.written() };
   } finally {
     prompt.close();
   }
@@ -63,7 +69,7 @@ test("a bad answer is explained and asked again", async () => {
   assert.equal(
     asked,
     templateQuestion +
-      '  There\'s no template named "nope".\n' +
+      '  There\'s no template or folder named "nope".\n' +
       templateQuestion +
       'Project name [my-folder]:   "a/b" can\'t be the project name, because it\'s used in file names.\n' +
       "Project name [my-folder]: Author [Grace Hopper]: " +
@@ -72,9 +78,22 @@ test("a bad answer is explained and asked again", async () => {
   );
 });
 
+test("a folder works as an answer to the template question too", async (t) => {
+  const folder = makeTree(t, { "README.md": "# {{name}}\n" });
+  const missing = join(folder, "missing");
+  const { chosen, asked } = await choose({}, `${missing}\n${folder}\n\n\n`);
+  // This template has no package.json, so there's no npm install question.
+  assert.deepEqual(chosen, { template: folder, name: "my-folder", author: "Grace Hopper", install: false });
+  assert.equal(
+    asked,
+    `${templateQuestion}  The template folder ${missing} doesn't exist.\n` +
+      `${templateQuestion}Project name [my-folder]: Author [Grace Hopper]: `,
+  );
+});
+
 test("bad values on the command line fail at once, without questions", async () => {
   const cases = [
-    [{ template: "nope" }, 'there\'s no template named "nope"; see "toolsmith new --list"'],
+    [{ template: "nope" }, 'there\'s no template or folder named "nope"; see "toolsmith new --list"'],
     [{ template: "node-cli", name: "a/b" }, '"a/b" can\'t be the project name, because it\'s used in file names; choose one with --name'],
   ];
   for (const [given, message] of cases) {
@@ -87,7 +106,7 @@ test("bad values on the command line fail at once, without questions", async () 
 });
 
 test("without a prompt (--yes, or no terminal) the defaults are taken, but a template is needed", async () => {
-  const withoutPrompt = (given) => chooseValues(given, { defaults, prompt: null });
+  const withoutPrompt = async (given) => byName(await chooseValues(given, { defaults, prompt: null }));
   assert.deepEqual(await withoutPrompt({ template: "node-cli" }), { template: "node-cli", ...defaults, install: true });
   assert.equal((await withoutPrompt({ template: "node-cli", install: false })).install, false);
   assert.equal((await withoutPrompt({ template: "web-static" })).install, false);

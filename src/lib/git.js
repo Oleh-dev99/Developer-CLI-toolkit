@@ -22,7 +22,10 @@ export async function git(args, { cwd = process.cwd(), env } = {}) {
     if (err.code === "ENOENT") {
       throw new Error("git isn't installed, or isn't on your PATH");
     }
-    const detail = (err.stderr || err.message).trim().split("\n")[0].replace(/^(error|fatal): /, "");
+    // git's own message: its first "fatal:" or "error:" line (lines like
+    // "remote: ..." can come before it), or else its first line.
+    const lines = (err.stderr || err.message).trim().split("\n");
+    const detail = (lines.find((line) => /^(fatal|error): /.test(line)) ?? lines[0]).replace(/^(error|fatal): /, "");
     throw Object.assign(new Error(`git ${args[0]}: ${detail}`), { exitCode: err.code, stderr: err.stderr ?? "" });
   }
 }

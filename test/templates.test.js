@@ -4,7 +4,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { dotfiles } from "../src/commands/new.js";
+import { dotfiles } from "../src/lib/templates.js";
 import { runCli, tempDir } from "./helpers.js";
 
 // Every folder in templates/ is a built-in template, so a new one is tested

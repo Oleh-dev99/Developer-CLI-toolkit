@@ -120,7 +120,7 @@ toolsmith is being built in twelve milestones. M1 is the foundation that every l
 - [x] Refuse to write into a non-empty directory unless `--force` is given
 - [x] Finish with `git init` and `npm install` (skip with `--no-git` / `--no-install`)
 - [x] Store dotfiles such as `.gitignore` as `_gitignore` in templates and rename them while generating, because npm leaves `.gitignore` files out of published packages
-- [ ] Use your own templates from a local folder or a git repository URL
+- [x] Use your own templates from a local folder or a git repository URL
 - [x] Tests generate every built-in template into a temporary directory and check the result
 
 ## M5 — Plugin system

@@ -106,7 +106,7 @@ test("no template, an unknown one, an invalid name or a file as the target is an
 
   const unknown = await runCli(["new", "nope", "x"], { cwd });
   assert.equal(unknown.code, 1);
-  assert.equal(unknown.stderr, 'error: there\'s no template named "nope"; see "toolsmith new --list"\n');
+  assert.equal(unknown.stderr, 'error: there\'s no template or folder named "nope"; see "toolsmith new --list"\n');
 
   const missing = await runCli(["new"], { cwd });
   assert.equal(missing.code, 1);

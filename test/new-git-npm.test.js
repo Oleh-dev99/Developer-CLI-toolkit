@@ -19,7 +19,7 @@ function fakeNpmArgs(folder) {
 // The fake npm on Windows is a batch file, whose lines end with \r\n.
 const lf = (text) => text.replaceAll("\r\n", "\n");
 
-test("makes a git repository with a first commit, then runs npm install", async (t) => {
+test("runs git init and npm install, then commits the files and package-lock.json", async (t) => {
   const cwd = tempDir(t);
   const env = gitEnv(t);
   const args = ["new", "node-cli", "my-tool", "--author", "Ada Lovelace"];
@@ -30,12 +30,36 @@ test("makes a git repository with a first commit, then runs npm install", async 
     lf(stdout),
     "  my-tool/README.md\n  my-tool/.gitignore\n  my-tool/bin/my-tool.js\n  my-tool/package.json\n" +
       'Created "my-tool" from the node-cli template in my-tool.\n' +
-      "Initialized a git repository and committed the files.\n" +
+      "Initialized a git repository.\n" +
       "Running npm install...\n" +
       "fake npm install\n" +
-      "npm install finished.\n",
+      "npm install finished.\n" +
+      'Made the first commit, "Initial commit from toolsmith (node-cli)".\n',
   );
 
+  const project = join(cwd, "my-tool");
+  assert.equal(fakeNpmArgs(project), "install");
+  assert.equal(gitIn(project, env, "log", "--format=%s"), "Initial commit from toolsmith (node-cli)");
+  assert.deepEqual(gitIn(project, env, "ls-files").split("\n"), [
+    ".gitignore",
+    "README.md",
+    "bin/my-tool.js",
+    "package-lock.json",
+    "package.json",
+  ]);
+  // Only the fake npm's own note is left out.
+  assert.equal(gitIn(project, env, "status", "--porcelain"), "?? fake-npm.txt");
+});
+
+test("when npm install fails, the template's files are still committed, and toolsmith says so", async (t) => {
+  const cwd = tempDir(t);
+  const env = { ...gitEnv(t), FAKE_NPM_EXIT_CODE: "3" };
+  const { stdout, stderr, code } = await runCli(["new", "node-cli", "my-tool", "--author", "x"], { cwd, env });
+  assert.equal(code, 1);
+  assert.match(stdout, /^Made the first commit with only the template's files, since npm install failed\.$/m);
+  assert.match(lf(stderr), /^error: npm install failed \(exit code 3\); the project's files are kept/m);
+
+  // The package-lock.json from the failed install isn't in the commit.
   const project = join(cwd, "my-tool");
   assert.equal(gitIn(project, env, "log", "--format=%s"), "Initial commit from toolsmith (node-cli)");
   assert.deepEqual(gitIn(project, env, "ls-files").split("\n"), [
@@ -44,8 +68,6 @@ test("makes a git repository with a first commit, then runs npm install", async 
     "bin/my-tool.js",
     "package.json",
   ]);
-  // npm ran in the project, after the commit.
-  assert.equal(fakeNpmArgs(project), "install");
 });
 
 test("with --force, the first commit has only the files from the template", async (t) => {
@@ -87,7 +109,7 @@ test("--no-git skips git init and the commit", async (t) => {
     env: gitEnv(t),
   });
   assert.equal(code, 0);
-  assert.doesNotMatch(stdout, /git init|git repository/);
+  assert.doesNotMatch(stdout, /git init|git repository|first commit/);
   assert.ok(!existsSync(join(cwd, "my-tool", ".git")), "a repository was made");
   assert.equal(fakeNpmArgs(join(cwd, "my-tool")), "install");
 });
@@ -98,6 +120,7 @@ test("--no-install skips npm install", async (t) => {
   const { stdout, code } = await runCli(["new", "node-cli", "my-tool", "--author", "x", "--no-install"], { cwd, env });
   assert.equal(code, 0);
   assert.doesNotMatch(stdout, /npm/);
+  assert.match(stdout, /^Made the first commit, "Initial commit from toolsmith \(node-cli\)"\.$/m);
   assert.equal(fakeNpmArgs(join(cwd, "my-tool")), undefined);
   assert.equal(gitIn(join(cwd, "my-tool"), env, "log", "--format=%s"), "Initial commit from toolsmith (node-cli)");
 });
