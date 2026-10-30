@@ -1,0 +1,34 @@
+{
+  "name": "toolsmith-plugin-example",
+  "version": "1.0.0",
+  "description": "An example toolsmith plugin: list TODO comments, and keep commits off protected git branches",
+  "license": "MIT",
+  "type": "module",
+  "exports": "./index.js",
+  "keywords": [
+    "toolsmith-plugin"
+  ],
+  "engines": {
+    "node": ">=22.12"
+  },
+  "scripts": {
+    "test": "node --test"
+  },
+  "toolsmith": {
+    "commands": [
+      "todos",
+      "guard"
+    ]
+  },
+  "peerDependencies": {
+    "toolsmith": "^0.1.0"
+  },
+  "peerDependenciesMeta": {
+    "toolsmith": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "commander": "^15.0.0"
+  }
+}

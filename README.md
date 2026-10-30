@@ -93,7 +93,7 @@ toolsmith git template unset              # stop using it
 
 ## Plugins
 
-Plugins add commands to toolsmith. A plugin is an npm package named `toolsmith-plugin-<something>` or `@scope/toolsmith-plugin-<something>`, and toolsmith finds it where npm installs it:
+Plugins add commands to toolsmith. A plugin is an npm package named `toolsmith-plugin-<something>` or `@scope/toolsmith-plugin-<something>`, and toolsmith finds it where npm installs it, in the current project (`node_modules` here or in a folder above) or globally:
 
 ```sh
 npm install --save-dev toolsmith-plugin-deploy    # for one project
@@ -101,9 +101,7 @@ npm install --global toolsmith-plugin-deploy      # for every project
 toolsmith deploy --help                           # the plugin's command, like any other
 ```
 
-Project plugins are found in the `node_modules` folder of the current folder or any folder above it, as Node.js finds packages. Global plugins are found in the `node_modules` folder that toolsmith itself is installed in, and in npm's global folder (from `npm_config_prefix`, or else the default next to Node.js). When a plugin is installed in both places, the project's copy is used.
-
-`toolsmith plugins` lists every plugin it finds, with its version, where it's from and what happened to it, and `--json` gives the same for scripts:
+`toolsmith plugins` lists every plugin it finds, with its version, where it's from and what happened to it (`--json` for scripts):
 
 ```text
 $ toolsmith plugins
@@ -113,74 +111,11 @@ toolsmith-plugin-shout   1.0.0  global   turned off
 3 plugins: 1 loaded, 1 turned off, 1 incompatible.
 ```
 
-"Loaded on demand" means the plugin lists its commands (see below), so toolsmith only imports it for one of its own commands, for help, and for this list.
-
-To turn a plugin off or back on, use `toolsmith plugins disable <name>` and `toolsmith plugins enable <name>`. They set the plugin to `false` or `true` in the `"plugins"` setting of `~/.toolsmithrc`, and leave the rest of the file exactly as it is. A plugin that's turned off isn't loaded at all.
-
-```json
-{
-  "plugins": {
-    "toolsmith-plugin-shout": false
-  }
-}
-```
-
-A plugin that fails to load is skipped with a warning, and the rest of toolsmith works as usual. So is a plugin made for other versions of toolsmith (see below). Built-in commands always win: a plugin command with the same name as one of them, or as a command another plugin already added, is skipped with a warning. `toolsmith plugins` shows all of this too.
+`toolsmith plugins disable <name>` turns a plugin off, so it isn't loaded at all, and `toolsmith plugins enable <name>` turns it back on. They change only the `"plugins"` setting in `~/.toolsmithrc`. A plugin that fails to load, or that was made for other toolsmith versions, is skipped with a warning, and built-in commands always win name clashes; the rest of toolsmith works as usual.
 
 > **Only install plugins you trust.** A plugin is a program that runs with your full user permissions, like anything else you install with npm: it can read and change your files and use your network. A project's plugins run whenever you use toolsmith in that project, so check what a project installs before you run toolsmith in it.
 
-### Writing a plugin
-
-A plugin's main file exports a `register(api)` function, where `api.command()` adds a command and returns a [Commander](https://github.com/tj/commander.js) command to describe:
-
-```js
-// index.js of the package toolsmith-plugin-shout
-export function register(api) {
-  api
-    .command("shout")
-    .description("print a greeting in capitals")
-    .argument("[name]", "who to greet", "world")
-    .action((name) => {
-      const { greeting } = api.config.settings;
-      api.output.success(`${greeting}, ${name}!`.toUpperCase());
-    });
-}
-```
-
-`api.config` holds the settings from `~/.toolsmithrc`, as `toolsmith config` shows them; read it inside an action. `api.output` has toolsmith's `success`, `info`, `warn` and `error` helpers, which follow its color settings, and `api.version` is toolsmith's version. Both ES modules and CommonJS (`module.exports = { register }`) work.
-
-Say which versions of toolsmith your plugin works with in its `package.json`. toolsmith skips the plugin, with a warning that names both versions, when its own version isn't in that range. Without a range, the plugin always loads.
-
-```json
-{
-  "name": "toolsmith-plugin-shout",
-  "version": "1.0.0",
-  "type": "module",
-  "peerDependencies": {
-    "toolsmith": "^0.1.0"
-  },
-  "peerDependenciesMeta": {
-    "toolsmith": { "optional": true }
-  }
-}
-```
-
-Mark the peer dependency optional, as above. npm installs peer dependencies by itself, and the name `toolsmith` on npm belongs to an unrelated package, which `npm install` would otherwise fetch.
-
-#### Keep toolsmith fast: list your commands
-
-List your plugin's commands under `"toolsmith"` in its `package.json`. Then toolsmith doesn't import your plugin every time it runs, only when one of your commands runs, for `toolsmith --help`, and for `toolsmith plugins`; every other command starts without it. A command with aliases is listed with them:
-
-```json
-{
-  "name": "toolsmith-plugin-shout",
-  "toolsmith": {
-    "commands": ["shout", { "name": "whisper", "aliases": ["psst"] }]
-  }
-}
-```
-
-The list has to match what `register(api)` adds: a command that isn't listed, a listed command it doesn't add, or different aliases get a warning, and those commands are skipped. Name clashes are settled with the list, so they come out the same as for a plugin without one. A plugin without the list is imported every time, which works just as well, only slower with many plugins: on a Windows test machine, 10 plugins of about 20 KB each made every toolsmith command about 27 ms slower without the list, and at most about 10 ms slower with it (as much as the measurements vary).
+To write a plugin, see the [plugin author guide](docs/PLUGINS.md), and start from the example plugin in [`examples/toolsmith-plugin-example`](examples/toolsmith-plugin-example), which adds `toolsmith todos` and `toolsmith guard`.
 
 ## Roadmap
 
