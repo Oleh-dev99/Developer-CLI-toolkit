@@ -6,6 +6,8 @@ const defaults = {
   color: true,
   greeting: "Hello",
   protectedBranches: ["main", "master", "develop"],
+  // Commit message templates for `toolsmith git template`, by name.
+  templates: {},
 };
 
 // Reads ~/.toolsmithrc (or the file named by TOOLSMITH_CONFIG) and merges it
@@ -51,11 +53,15 @@ export function loadConfig() {
   return { path, found: true, settings, warnings };
 }
 
-// "boolean", "string", "list of strings", …: what a setting must be, in words
-// that also work in error messages.
+// "boolean", "string", "list of strings", "map of names to text", …: what a
+// setting must be, in words that also work in error messages.
 function kindOf(value) {
+  const isText = (item) => typeof item === "string";
   if (Array.isArray(value)) {
-    return value.every((item) => typeof item === "string") ? "list of strings" : "list";
+    return value.every(isText) ? "list of strings" : "list";
+  }
+  if (value !== null && typeof value === "object") {
+    return Object.values(value).every(isText) ? "map of names to text" : "map";
   }
   return value === null ? "null" : typeof value;
 }

@@ -17,7 +17,7 @@ test("a missing config file means defaults, silently", async (t) => {
   assert.equal(
     stdout,
     `Config file: none, using defaults (no file at ${path})\nSettings:\n  color: true\n  greeting: "Hello"\n` +
-      `  protectedBranches: ["main","master","develop"]\n`,
+      `  protectedBranches: ["main","master","develop"]\n  templates: {}\n`,
   );
 });
 
@@ -30,7 +30,8 @@ test("a valid config file is used", async (t) => {
   assert.equal(config.stderr, "");
   assert.equal(
     config.stdout,
-    `Config file: ${path}\nSettings:\n  color: true\n  greeting: "Hi"\n  protectedBranches: ["main","master","develop"]\n`,
+    `Config file: ${path}\nSettings:\n  color: true\n  greeting: "Hi"\n  protectedBranches: ["main","master","develop"]\n` +
+      "  templates: {}\n",
   );
 
   const hello = await runCli(["hello", "Ada"], { env });
@@ -58,6 +59,13 @@ test("a list setting must be a list of strings", async (t) => {
   const { stderr, code } = await runCli(["config"], { env: { TOOLSMITH_CONFIG: path } });
   assert.equal(code, 1);
   assert.equal(stderr, `error: "protectedBranches" in config file ${path} must be a list of strings, got "main"\n`);
+});
+
+test("a map setting must map names to text", async (t) => {
+  const path = writeTempConfig(t, '{"templates": {"team": 1}}');
+  const { stderr, code } = await runCli(["config"], { env: { TOOLSMITH_CONFIG: path } });
+  assert.equal(code, 1);
+  assert.equal(stderr, `error: "templates" in config file ${path} must be a map of names to text, got {"team":1}\n`);
 });
 
 test("a config file that isn't a JSON object is an error", async (t) => {

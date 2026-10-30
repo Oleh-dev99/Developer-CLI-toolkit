@@ -105,9 +105,9 @@ toolsmith is being built in twelve milestones. M1 is the foundation that every l
 
 ### Commit message templates — `toolsmith git template`
 
-- [ ] Built-in templates (starting with Conventional Commits), plus your own templates in `~/.toolsmithrc`
-- [ ] `list` and `show <name>` subcommands
-- [ ] `use <name>` sets the repository's `commit.template`, so `git commit` opens the editor pre-filled; `unset` removes it
+- [x] Built-in templates (starting with Conventional Commits), plus your own templates in `~/.toolsmithrc`
+- [x] `list` and `show <name>` subcommands
+- [x] `use <name>` sets the repository's `commit.template`, so `git commit` opens the editor pre-filled; `unset` removes it
 
 ## M4 — Scaffolding
 
