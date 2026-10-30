@@ -10,8 +10,8 @@ const bin = fileURLToPath(new URL("../bin/toolsmith.js", import.meta.url));
 // Runs the CLI in a child process and resolves to { stdout, stderr, code }.
 // TOOLSMITH_CONFIG always points to a temp path, so the real ~/.toolsmithrc is
 // never read, and NO_COLOR=1 is set unless a test overrides it. Set a variable
-// to undefined in `env` to remove it.
-export function runCli(args, { env = {} } = {}) {
+// to undefined in `env` to remove it. `cwd` sets the folder the CLI runs in.
+export function runCli(args, { env = {}, cwd } = {}) {
   const childEnv = { ...process.env };
   // The test runner sets FORCE_COLOR for test files when the terminal has
   // colors, so start from the same color setup everywhere.
@@ -23,6 +23,7 @@ export function runCli(args, { env = {} } = {}) {
 
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [bin, ...args], {
+      cwd,
       env: childEnv,
       stdio: ["ignore", "pipe", "pipe"],
     });

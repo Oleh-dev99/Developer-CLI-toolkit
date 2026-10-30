@@ -61,10 +61,10 @@ toolsmith is being built in twelve milestones. M1 is the foundation that every l
 
 ### Bulk rename — `toolsmith rename`
 
-- [ ] Find and replace in file names, as plain text or a regular expression with capture groups (`$1`)
+- [x] Find and replace in file names, as plain text or a regular expression with capture groups (`$1`)
 - [ ] Select files with glob patterns, optionally including subfolders; toolsmith expands the patterns itself because Windows shells don't
-- [ ] `--dry-run` prints an old → new table and changes nothing
-- [ ] Plan every rename up front and stop before touching anything if two files would get the same name or a target already exists
+- [x] `--dry-run` prints an old → new table and changes nothing
+- [x] Plan every rename up front and stop before touching anything if two files would get the same name or a target already exists
 - [ ] Handle case-only renames (`readme.md` → `README.md`) on case-insensitive file systems (Windows, macOS)
 
 ### Find duplicates — `toolsmith dupes`
