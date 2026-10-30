@@ -5,6 +5,7 @@ import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { displayPath, isValidFileName } from "../lib/files.js";
 import { git } from "../lib/git.js";
+import { createPrompt, PromptCancelled } from "../lib/prompt.js";
 import { walk } from "../lib/walk.js";
 import { success } from "../output.js";
 
@@ -28,50 +29,111 @@ export function register(program) {
     .option("--list", "show the built-in templates")
     .option("--name <name>", "the project name (default: the folder's name)")
     .option("--author <name>", "the author (default: your git user.name)")
+    .option("-y, --yes", "don't ask anything, take the defaults")
     .option("--force", "write into a folder that isn't empty, replacing files with the same names")
     .addHelpText(
       "after",
       `
 Examples:
-  See the built-in templates:
-  $ toolsmith new --list
+  Answer a few questions (template, name, author):
+  $ toolsmith new
 
   Create the folder my-tool from the node-cli template:
   $ toolsmith new node-cli my-tool
 
+  The same without any questions, for a script:
+  $ toolsmith new node-cli my-tool --yes
+
   Use the current folder even though it has files in it, with another author:
   $ toolsmith new node-cli --force --author "Ada Lovelace"
 
-Templates can use {{name}}, {{author}} and {{year}} in file contents and in
-file and folder names.`,
+In a terminal, toolsmith asks for whatever you didn't give on the command line;
+press Enter to take the default in brackets. With --yes, or when the input
+isn't a terminal (scripts, CI), it never asks. Templates can use {{name}},
+{{author}} and {{year}} in file contents and in file and folder names; see them
+with --list.`,
     )
     .action(async (template, directory = ".", options) => {
       if (options.list) {
         printTemplates();
         return;
       }
-      if (!template) {
-        throw new Error('choose a template, like "toolsmith new node-cli my-project"; see "toolsmith new --list"');
-      }
-      const source = templateFolder(template);
       const target = resolve(directory);
       const where = displayPath(target) || "the current folder";
-      await checkTarget(target, where, options.force);
+      // Questions only when someone can answer them: in a terminal, without --yes.
+      const prompt = options.yes || !process.stdin.isTTY ? null : createPrompt();
+      const given = { template, name: options.name, author: options.author };
 
-      const values = {
-        name: options.name ?? basename(target),
-        author: options.author ?? (await defaultAuthor()),
-        year: String(new Date().getFullYear()),
-      };
-      if (!isValidFileName(values.name)) {
-        throw new Error(`"${values.name}" can't be the project name, because it's used in file names; choose one with --name`);
+      // Mistakes on the command line first, then the folder, then questions.
+      checkGivenValues(given, Boolean(prompt));
+      await checkTarget(target, where, options.force);
+      let chosen;
+      try {
+        const defaults = { name: basename(target), author: options.author ?? (await defaultAuthor()) };
+        chosen = await chooseValues(given, { defaults, prompt });
+      } finally {
+        prompt?.close();
       }
 
-      for (const { path, replaced } of await generate(source, target, values)) {
+      const values = { name: chosen.name, author: chosen.author, year: String(new Date().getFullYear()) };
+      for (const { path, replaced } of await generate(templateFolder(chosen.template), target, values)) {
         console.log(`  ${displayPath(path)}${replaced ? " (replaced)" : ""}`);
       }
-      success(`Created "${values.name}" from the ${template} template in ${where}.`);
+      success(`Created "${values.name}" from the ${chosen.template} template in ${where}.`);
     });
+}
+
+// Throws for an unknown template or an invalid name given on the command line,
+// and for a missing template when there's nobody to ask for one.
+function checkGivenValues({ template, name }, canAsk) {
+  if (template !== undefined && !builtInTemplates().includes(template)) {
+    throw new Error(`there's no template named "${template}"; see "toolsmith new --list"`);
+  }
+  if (name !== undefined && !isValidFileName(name)) {
+    throw new Error(badName(name));
+  }
+  if (template === undefined && !canAsk) {
+    throw new Error('choose a template, like "toolsmith new node-cli my-project"; see "toolsmith new --list"');
+  }
+}
+
+// Picks the template, name and author. Values from the command line are used
+// as they are. The rest is asked with `prompt`, which shows the default from
+// `defaults` and asks again after a bad answer; with no prompt (--yes, or input
+// that isn't a terminal) the defaults are taken.
+export async function chooseValues(given, { defaults, prompt }) {
+  checkGivenValues(given, Boolean(prompt));
+  let { template, name, author } = given;
+  try {
+    if (template === undefined) {
+      const templates = builtInTemplates();
+      template = await prompt.ask(`Template (${templates.join(", ")})`, {
+        validate: (answer) => (templates.includes(answer) ? undefined : `There's no template named "${answer}".`),
+      });
+    }
+    name ??= prompt
+      ? await prompt.ask("Project name", {
+          defaultValue: defaults.name,
+          validate: (answer) =>
+            isValidFileName(answer) ? undefined : `"${answer}" can't be the project name, because it's used in file names.`,
+        })
+      : defaults.name;
+    author ??= prompt ? await prompt.ask("Author", { defaultValue: defaults.author }) : defaults.author;
+  } catch (err) {
+    if (err instanceof PromptCancelled) {
+      throw new Error("cancelled; nothing was created");
+    }
+    throw err;
+  }
+  // The folder's name may not work as a project name (a drive's root has none).
+  if (!isValidFileName(name)) {
+    throw new Error(badName(name));
+  }
+  return { template, name, author };
+}
+
+function badName(name) {
+  return `"${name}" can't be the project name, because it's used in file names; choose one with --name`;
 }
 
 function builtInTemplates() {

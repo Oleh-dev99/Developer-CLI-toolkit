@@ -1,4 +1,3 @@
-import { createInterface } from "node:readline";
 import { styleText } from "node:util";
 
 // Messages for the user: success() and info() go to stdout, warn() and
@@ -32,32 +31,4 @@ export function warn(message) {
 
 export function error(message) {
   console.error(paint("red", `error: ${message}`, process.stderr));
-}
-
-// Asks yes/no questions: confirm(question) writes the question to stderr and
-// reads one answer line from stdin. Only "y" or "yes" counts as yes; input that
-// ends without an answer is a no. All answers come from one reader, so several
-// piped answers ("y\nn\n") reach the right questions. Call close() when done,
-// or the open input keeps the program running.
-export function prompter() {
-  let reader;
-  let lines;
-  return {
-    async confirm(question) {
-      process.stderr.write(question);
-      if (!reader) {
-        reader = createInterface({ input: process.stdin, crlfDelay: Infinity });
-        lines = reader[Symbol.asyncIterator]();
-      }
-      const { value, done } = await lines.next();
-      if (done) {
-        process.stderr.write("\n");
-        return false;
-      }
-      return /^y(es)?$/i.test(value.trim());
-    },
-    close() {
-      reader?.close();
-    },
-  };
 }

@@ -42,7 +42,16 @@ toolsmith new web-static --force                   # into the current folder, ev
 | `node-lib` | A JavaScript library for Node.js (ESM), with `node:test` tests |
 | `web-static` | A static web page with HTML, CSS and JavaScript, no build step |
 
-The name defaults to the folder's name and the author to your git `user.name`. A folder that isn't empty is left alone unless you add `--force`.
+In a terminal, `toolsmith new` asks for whatever you didn't give on the command line. Press Enter to take the default in brackets:
+
+```text
+$ toolsmith new
+Template (node-cli, node-lib, web-static): node-lib
+Project name [my-project]:
+Author [Ada Lovelace]:
+```
+
+The name defaults to the folder's name and the author to your git `user.name`. `--yes` (`-y`) takes the defaults without asking, and in scripts or CI, where the input isn't a terminal, it never asks. A folder that isn't empty is left alone unless you add `--force`.
 
 ### Commit message templates
 

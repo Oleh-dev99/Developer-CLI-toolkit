@@ -3,9 +3,32 @@ import { randomUUID } from "node:crypto";
 import { linkSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { PassThrough, Writable } from "node:stream";
 import { fileURLToPath } from "node:url";
 
 const bin = fileURLToPath(new URL("../bin/toolsmith.js", import.meta.url));
+
+// For runCli: makes the CLI believe its input is a terminal, so it asks its
+// questions, and the test answers them through `input`.
+export const terminalEnv = {
+  NODE_OPTIONS: `--import "${new URL("fixtures/terminal-stdin.mjs", import.meta.url).href}"`,
+};
+
+// Streams for createPrompt: `answers` are typed in all at once, then the input
+// ends; written() returns everything the prompt wrote.
+export function promptStreams(answers) {
+  let written = "";
+  const input = new PassThrough();
+  const output = new Writable({
+    decodeStrings: false,
+    write(chunk, encoding, callback) {
+      written += chunk;
+      callback();
+    },
+  });
+  input.end(answers);
+  return { input, output, written: () => written };
+}
 
 // Runs the CLI in a child process and resolves to { stdout, stderr, code }.
 // TOOLSMITH_CONFIG always points to a temp path, so the real ~/.toolsmithrc is

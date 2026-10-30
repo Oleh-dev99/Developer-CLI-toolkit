@@ -1,6 +1,7 @@
 import { count } from "../../lib/format.js";
 import { branchExists, currentBranch, defaultBranch, ensureRepository, git } from "../../lib/git.js";
-import { error, info, prompter, success } from "../../output.js";
+import { createPrompt } from "../../lib/prompt.js";
+import { error, info, success } from "../../output.js";
 
 // git commit-tree needs a name and email; the squash check's throwaway commit
 // gets these, so it works even where no git identity is set up.
@@ -86,7 +87,7 @@ main, master and develop) are never deleted, here or on origin. --remote runs
         return;
       }
 
-      const prompts = prompter();
+      const prompts = createPrompt();
       const ask = (question) => options.yes || prompts.confirm(question);
       let localFailures = 0;
       let remoteFailures = 0;
