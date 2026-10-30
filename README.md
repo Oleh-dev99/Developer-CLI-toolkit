@@ -103,17 +103,27 @@ toolsmith deploy --help                           # the plugin's command, like a
 
 Project plugins are found in the `node_modules` folder of the current folder or any folder above it, as Node.js finds packages. Global plugins are found in the `node_modules` folder that toolsmith itself is installed in, and in npm's global folder (from `npm_config_prefix`, or else the default next to Node.js). When a plugin is installed in both places, the project's copy is used.
 
-To turn a plugin off, set it to `false` in `~/.toolsmithrc`; a plugin that's turned off isn't loaded at all:
+`toolsmith plugins` lists every plugin it finds, with its version, where it's from and what happened to it, and `--json` gives the same for scripts:
+
+```text
+$ toolsmith plugins
+toolsmith-plugin-deploy  1.2.0  project  loaded, adds deploy
+toolsmith-plugin-old     0.3.0  project  incompatible: it needs toolsmith >=2.0.0, and this is toolsmith 0.1.0
+toolsmith-plugin-shout   1.0.0  global   turned off
+3 plugins: 1 loaded, 1 turned off, 1 incompatible.
+```
+
+To turn a plugin off or back on, use `toolsmith plugins disable <name>` and `toolsmith plugins enable <name>`. They set the plugin to `false` or `true` in the `"plugins"` setting of `~/.toolsmithrc`, and leave the rest of the file exactly as it is. A plugin that's turned off isn't loaded at all.
 
 ```json
 {
   "plugins": {
-    "toolsmith-plugin-deploy": false
+    "toolsmith-plugin-shout": false
   }
 }
 ```
 
-A plugin that fails to load is skipped with a warning, and the rest of toolsmith works as usual. Built-in commands always win: a plugin command with the same name as one of them, or as a command another plugin already added, is skipped with a warning.
+A plugin that fails to load is skipped with a warning, and the rest of toolsmith works as usual. So is a plugin made for other versions of toolsmith (see below). Built-in commands always win: a plugin command with the same name as one of them, or as a command another plugin already added, is skipped with a warning. `toolsmith plugins` shows all of this too.
 
 > **Only install plugins you trust.** A plugin is a program that runs with your full user permissions, like anything else you install with npm: it can read and change your files and use your network. A project's plugins run whenever you use toolsmith in that project, so check what a project installs before you run toolsmith in it.
 
@@ -136,6 +146,24 @@ export function register(api) {
 ```
 
 `api.config` holds the settings from `~/.toolsmithrc`, as `toolsmith config` shows them; read it inside an action. `api.output` has toolsmith's `success`, `info`, `warn` and `error` helpers, which follow its color settings, and `api.version` is toolsmith's version. Both ES modules and CommonJS (`module.exports = { register }`) work.
+
+Say which versions of toolsmith your plugin works with in its `package.json`. toolsmith skips the plugin, with a warning that names both versions, when its own version isn't in that range. Without a range, the plugin always loads.
+
+```json
+{
+  "name": "toolsmith-plugin-shout",
+  "version": "1.0.0",
+  "type": "module",
+  "peerDependencies": {
+    "toolsmith": "^0.1.0"
+  },
+  "peerDependenciesMeta": {
+    "toolsmith": { "optional": true }
+  }
+}
+```
+
+Mark the peer dependency optional, as above. npm installs peer dependencies by itself, and the name `toolsmith` on npm belongs to an unrelated package, which `npm install` would otherwise fetch.
 
 ## Roadmap
 

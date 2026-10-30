@@ -129,10 +129,10 @@ toolsmith is being built in twelve milestones. M1 is the foundation that every l
 
 - [x] Plugin API: a plugin exports a `register(api)` function, and `api` lets it add commands and use toolsmith's config and output helpers
 - [x] Discover installed `toolsmith-plugin-*` and `@scope/toolsmith-plugin-*` packages (global and in the current project); turn individual plugins on or off in `~/.toolsmithrc`
-- [ ] Plugins declare the toolsmith versions they support in `peerDependencies`; incompatible plugins are skipped with a warning
+- [x] Plugins declare the toolsmith versions they support in `peerDependencies`; incompatible plugins are skipped with a warning
 - [x] A plugin that fails to load prints a warning and never breaks the rest of the CLI
 - [x] Built-in commands always win name clashes; warn when two plugins register the same command
-- [ ] `toolsmith plugins` lists installed plugins, their versions and the commands they add
+- [x] `toolsmith plugins` lists installed plugins, their versions and the commands they add
 - [ ] Startup stays fast with many plugins installed (measure it; load plugin code only when needed)
 - [ ] Example plugin (`toolsmith-plugin-example`) and a guide for plugin authors
 - [x] Document that plugins run with your full user permissions, so only install plugins you trust

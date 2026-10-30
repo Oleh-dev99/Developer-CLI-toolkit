@@ -2,24 +2,9 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
-import { makeTree, runCli, writeTempConfig } from "./helpers.js";
+import { makeTree, pluginPackage as plugin, pluginSays as says, runCli, writeTempConfig } from "./helpers.js";
 
 const { version } = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
-
-// Files for makeTree: a plugin package `name` in `folder`, with `code` as its
-// index.js and a package.json (an ES module package, unless given).
-function plugin(name, code, { folder = "node_modules", packageJson } = {}) {
-  return {
-    [`${folder}/${name}/package.json`]: packageJson ?? JSON.stringify({ name, version: "1.0.0", type: "module" }),
-    [`${folder}/${name}/index.js`]: code,
-  };
-}
-
-// Plugin code that adds `command`, which prints `text`.
-const says = (command, text) => `export function register(api) {
-  api.command(${JSON.stringify(command)}).description("prints ${text}").action(() => api.output.success(${JSON.stringify(text)}));
-}
-`;
 
 const greet = `export function register(api) {
   api
@@ -184,4 +169,29 @@ test("plugins aren't loaded when the config file can't be read", async (t) => {
   assert.equal(code, 0);
   assert.equal(stderr, "");
   assert.doesNotMatch(stdout, /works/);
+});
+
+test("a plugin whose peerDependencies leave out this toolsmith version is skipped, without loading it", async (t) => {
+  const cwd = makeTree(t, {
+    ...plugin("toolsmith-plugin-any", says("any", "any version"), { toolsmith: "*" }),
+    // If these two were loaded, they would crash with another warning.
+    ...plugin("toolsmith-plugin-bad-range", 'throw new Error("loaded");', { toolsmith: "latest" }),
+    ...plugin("toolsmith-plugin-fits", says("fits", "fits"), { toolsmith: `^${version} || ^99.0.0` }),
+    ...plugin("toolsmith-plugin-no-range", says("no-range", "no range given")),
+    ...plugin("toolsmith-plugin-too-new", 'throw new Error("loaded");', { toolsmith: ">=99.0.0" }),
+  });
+  const warnings =
+    'warning: plugin toolsmith-plugin-bad-range was skipped: its toolsmith version range "latest" isn\'t valid\n' +
+    `warning: plugin toolsmith-plugin-too-new was skipped: it needs toolsmith >=99.0.0, and this is toolsmith ${version}\n`;
+
+  for (const [command, output] of [
+    ["any", "any version\n"],
+    ["fits", "fits\n"],
+    ["no-range", "no range given\n"],
+  ]) {
+    const { stdout, stderr, code } = await runCli([command], { cwd });
+    assert.equal(code, 0, stderr);
+    assert.equal(stdout, output);
+    assert.equal(stderr, warnings);
+  }
 });

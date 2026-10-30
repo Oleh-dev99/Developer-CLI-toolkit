@@ -1,6 +1,7 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
+import { setTopLevelValue } from "./lib/json-text.js";
 
 const defaults = {
   color: true,
@@ -75,6 +76,37 @@ function isKind(value, kind) {
       return isMap && Object.values(value).every((item) => typeof item === "boolean");
     default:
       return typeof value === kind;
+  }
+}
+
+// Sets `key` to `value` in the config file at `path`, creating the file if
+// there's none. The rest of the file stays as it is: its other settings and
+// their layout, and its encoding (see decode).
+export function writeSetting(path, key, value) {
+  let buffer;
+  try {
+    buffer = readFileSync(path);
+  } catch (err) {
+    if (err.code !== "ENOENT") {
+      throw new Error(`can't read config file ${path}: ${err.message}`);
+    }
+  }
+  let output;
+  if (!buffer) {
+    output = `${JSON.stringify({ [key]: value }, null, 2)}\n`;
+  } else {
+    const text = setTopLevelValue(decode(buffer), key, value);
+    if (buffer[0] === 0xff && buffer[1] === 0xfe) {
+      output = Buffer.concat([buffer.subarray(0, 2), Buffer.from(text, "utf16le")]);
+    } else {
+      const hasBom = buffer[0] === 0xef && buffer[1] === 0xbb && buffer[2] === 0xbf;
+      output = `${hasBom ? "﻿" : ""}${text}`;
+    }
+  }
+  try {
+    writeFileSync(path, output);
+  } catch (err) {
+    throw new Error(`can't write config file ${path}: ${err.message}`);
   }
 }
 

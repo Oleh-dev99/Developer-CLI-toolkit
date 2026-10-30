@@ -96,6 +96,26 @@ export function gitEnv(t) {
   return { GIT_CONFIG_GLOBAL: file, GIT_CONFIG_NOSYSTEM: "1", GIT_CEILING_DIRECTORIES: tmpdir() };
 }
 
+// Files for makeTree: a plugin package `name` in `folder` (a node_modules
+// folder), with `code` as its index.js. Its package.json is an ES module
+// package with `version`, and with `toolsmith` as the range in its
+// peerDependencies if that's given; `packageJson` replaces it entirely.
+export function pluginPackage(name, code, { folder = "node_modules", version = "1.0.0", toolsmith, packageJson } = {}) {
+  const json = { name, version, type: "module", ...(toolsmith && { peerDependencies: { toolsmith } }) };
+  return {
+    [`${folder}/${name}/package.json`]: packageJson ?? JSON.stringify(json),
+    [`${folder}/${name}/index.js`]: code,
+  };
+}
+
+// Plugin code that adds the command `command`, which prints `text`.
+export function pluginSays(command, text) {
+  return `export function register(api) {
+  api.command(${JSON.stringify(command)}).description("prints ${text}").action(() => api.output.success(${JSON.stringify(text)}));
+}
+`;
+}
+
 // Writes `contents` to a config file in a fresh temp folder and returns its path.
 export function writeTempConfig(t, contents) {
   const path = join(tempDir(t), "config.json");

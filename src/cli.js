@@ -6,6 +6,7 @@ import * as dupesCommand from "./commands/dupes.js";
 import * as gitCommand from "./commands/git/index.js";
 import * as helloCommand from "./commands/hello.js";
 import * as newCommand from "./commands/new.js";
+import * as pluginsCommand from "./commands/plugins.js";
 import * as renameCommand from "./commands/rename.js";
 import * as sizeCommand from "./commands/size.js";
 import { loadConfig } from "./config.js";
@@ -15,7 +16,16 @@ import { loadPlugins } from "./plugins.js";
 const { version } = createRequire(import.meta.url)("../package.json");
 
 // Each command module exports register(program, context).
-const commands = [configCommand, dupesCommand, gitCommand, helloCommand, newCommand, renameCommand, sizeCommand];
+const commands = [
+  configCommand,
+  dupesCommand,
+  gitCommand,
+  helloCommand,
+  newCommand,
+  pluginsCommand,
+  renameCommand,
+  sizeCommand,
+];
 
 export async function run(argv) {
   // Read the config file before parsing, so "color": false also covers usage
@@ -68,9 +78,14 @@ export async function run(argv) {
     command.register(program, context);
   }
   // Plugins load only with a config file that could be read, because it may
-  // turn some of them off.
+  // turn some of them off. `toolsmith plugins` lists what happened to each, so
+  // it doesn't need the warnings too. (toolsmith's own options take no values,
+  // so the command is the first argument that isn't an option.)
   if (config) {
-    await loadPlugins(program, context, { enabled: config.settings.plugins, version });
+    const quiet = argv.slice(2).find((arg) => !arg.startsWith("-")) === "plugins";
+    context.plugins = await loadPlugins(program, context, { enabled: config.settings.plugins, version, quiet });
+  } else {
+    context.plugins = [];
   }
 
   // Commander reports usage errors (like an unknown command) itself and exits
