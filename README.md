@@ -6,7 +6,7 @@ A command-line toolkit for developers, built with Node.js.
 
 ## Usage
 
-Install the dependencies first:
+toolsmith isn't on npm yet; the name `toolsmith` there belongs to an unrelated package, so it will be published under a new name. Until then, run it from a clone of this repository. Install the dependencies first:
 
 ```sh
 npm install
@@ -116,6 +116,10 @@ toolsmith-plugin-shout   1.0.0  global   turned off
 > **Only install plugins you trust.** A plugin is a program that runs with your full user permissions, like anything else you install with npm: it can read and change your files and use your network. A project's plugins run whenever you use toolsmith in that project, so check what a project installs before you run toolsmith in it.
 
 To write a plugin, see the [plugin author guide](docs/PLUGINS.md), and start from the example plugin in [`examples/toolsmith-plugin-example`](examples/toolsmith-plugin-example), which adds `toolsmith todos` and `toolsmith guard`.
+
+## Development
+
+`npm test` runs every test. The npm package holds only what toolsmith needs to run: `bin/`, `src/` and `templates/` (the `"files"` in `package.json`), with the README and the license. `npm pack --dry-run` lists it, and a test checks that the list is exactly that, so tests, docs and the example plugin never end up in the package.
 
 ## Roadmap
 

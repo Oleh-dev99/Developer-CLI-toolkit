@@ -1,11 +1,37 @@
 {
   "name": "toolsmith",
   "version": "0.1.0",
+  "description": "A command-line toolkit for developers: project templates, git helpers, file tools, and plugins",
+  "keywords": [
+    "cli",
+    "developer-tools",
+    "toolkit",
+    "scaffolding",
+    "templates",
+    "git",
+    "rename",
+    "duplicates",
+    "plugins"
+  ],
+  "homepage": "https://github.com/Oleh-dev99/Developer-CLI-toolkit#readme",
+  "bugs": {
+    "url": "https://github.com/Oleh-dev99/Developer-CLI-toolkit/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Oleh-dev99/Developer-CLI-toolkit.git"
+  },
   "license": "MIT",
+  "author": "Oleh-dev99",
   "type": "module",
   "bin": {
     "toolsmith": "bin/toolsmith.js"
   },
+  "files": [
+    "bin/",
+    "src/",
+    "templates/"
+  ],
   "scripts": {
     "test": "node --test \"test/**/*.test.js\"",
     "test:coverage": "node --test --experimental-test-coverage \"test/**/*.test.js\""
