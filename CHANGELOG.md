@@ -4,6 +4,8 @@ All notable changes to toolsmith are written down here. The format follows [Keep
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-11-09
+
 The first release.
 
 ### Added
