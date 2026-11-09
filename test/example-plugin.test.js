@@ -7,7 +7,8 @@ import { fileURLToPath } from "node:url";
 import { makeRepo, makeTree, runCli, writeTempConfig } from "./helpers.js";
 
 const example = fileURLToPath(new URL("../examples/toolsmith-plugin-example", import.meta.url));
-const { version } = JSON.parse(readFileSync(join(example, "package.json"), "utf8"));
+const { version, peerDependencies } = JSON.parse(readFileSync(join(example, "package.json"), "utf8"));
+const { name: toolsmithPackage } = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
 
 // Links the example plugin into `project`'s node_modules, as
 // `npm install ../toolsmith-plugin-example` does. On Windows it's a junction,
@@ -65,6 +66,15 @@ test("the example plugin's guard command reads protectedBranches from the config
   const onFeature = await runCli(["guard"], { cwd: repo.dir, env });
   assert.equal(onFeature.code, 0, onFeature.stderr);
   assert.equal(onFeature.stdout, "feature isn't a protected branch.\n");
+});
+
+test("the example plugin gives its toolsmith range under toolsmith's npm name", async (t) => {
+  const project = makeTree(t, { "README.md": "# Project\n" });
+  installExample(project);
+  const { stdout } = await runCli(["plugins", "--json"], { cwd: project });
+  const [plugin] = JSON.parse(stdout).plugins;
+  assert.ok(peerDependencies[toolsmithPackage], "the example has no range for toolsmith");
+  assert.equal(plugin.toolsmithRange, peerDependencies[toolsmithPackage]);
 });
 
 test("the example plugin's own tests pass", () => {

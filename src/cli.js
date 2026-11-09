@@ -13,7 +13,7 @@ import { loadConfig } from "./config.js";
 import { disableColor, error, warn } from "./output.js";
 import { loadPlugins } from "./plugins.js";
 
-const { version } = createRequire(import.meta.url)("../package.json");
+const { name: packageName, version } = createRequire(import.meta.url)("../package.json");
 
 // Each command module exports register(program, context).
 const commands = [
@@ -87,6 +87,7 @@ export async function run(argv) {
     context.plugins = await loadPlugins(program, context, {
       enabled: config.settings.plugins,
       version,
+      packageName,
       command: asked.command,
       all: asked.help || asked.command === "help" || asked.command === "plugins",
       quiet: asked.command === "plugins",

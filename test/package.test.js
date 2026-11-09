@@ -47,6 +47,13 @@ test("the npm package has toolsmith's code and templates, and nothing else", (t)
   assert.ok(expected.includes(packageJson.bin.toolsmith), "the command's script isn't in the package");
 });
 
+test("toolsmith is published under its scoped name, and the command is still toolsmith", () => {
+  assert.equal(packageJson.name, "@oleh-dev99/toolsmith");
+  // Scoped packages are private unless they're published as public.
+  assert.deepEqual(packageJson.publishConfig, { access: "public" });
+  assert.deepEqual(Object.keys(packageJson.bin), ["toolsmith"]);
+});
+
 test("package.json says what npm shows about toolsmith", () => {
   for (const field of ["description", "keywords", "homepage", "bugs", "repository", "license", "engines"]) {
     assert.ok(packageJson[field], `package.json has no "${field}"`);

@@ -1,5 +1,5 @@
 {
-  "name": "toolsmith",
+  "name": "@oleh-dev99/toolsmith",
   "version": "0.1.0",
   "description": "A command-line toolkit for developers: project templates, git helpers, file tools, and plugins",
   "keywords": [
@@ -32,6 +32,9 @@
     "src/",
     "templates/"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "test": "node --test \"test/**/*.test.js\"",
     "test:coverage": "node --test --experimental-test-coverage \"test/**/*.test.js\""

@@ -26,14 +26,15 @@ const pluginName = /^toolsmith-plugin-./;
 //   status           "loaded", "off" (turned off in the config file),
 //                    "incompatible" or "skipped"
 //   reason           why it's incompatible or skipped
-//   toolsmithRange   the toolsmith versions it supports, from its
+//   toolsmithRange   the toolsmith versions it supports: the entry for
+//                    `packageName`, toolsmith's npm name, in its
 //                    peerDependencies (or null)
 //   onDemand         whether it lists its commands, so it's imported only
 //                    when needed
 //   commands         the names of the commands it added
 //   skippedCommands  { name, reason } for each command that was skipped
 export async function loadPlugins(program, context, options) {
-  const { enabled, version, quiet = false, command, all = false, cwd = process.cwd() } = options;
+  const { enabled, version, packageName, quiet = false, command, all = false, cwd = process.cwd() } = options;
   const report = quiet ? () => {} : warn;
   // Command names and aliases, and who has them: null for toolsmith itself.
   const taken = new Map([["help", null]]);
@@ -83,7 +84,7 @@ export async function loadPlugins(program, context, options) {
     const packageJson = packages[index];
     if (!(packageJson instanceof Error)) {
       result.version = packageJson.version ?? null;
-      result.toolsmithRange = packageJson.peerDependencies?.toolsmith ?? null;
+      result.toolsmithRange = packageJson.peerDependencies?.[packageName] ?? null;
     }
 
     if (plugin.usedCopy) {
@@ -283,8 +284,11 @@ function packageFolders(cwd) {
 // to Node.js (on Windows, also %APPDATA%\npm).
 function globalFolders() {
   const folders = [];
-  if (basename(dirname(toolsmithFolder)) === "node_modules") {
-    folders.push(dirname(toolsmithFolder));
+  // A scoped package is one folder deeper: node_modules/@scope/name.
+  const parent = dirname(toolsmithFolder);
+  const installedIn = basename(parent).startsWith("@") ? dirname(parent) : parent;
+  if (basename(installedIn) === "node_modules") {
+    folders.push(installedIn);
   }
   const configured = process.env.npm_config_prefix || process.env.NPM_CONFIG_PREFIX;
   const windows = process.platform === "win32";

@@ -17,10 +17,10 @@ The quickest start is the example plugin in [`examples/toolsmith-plugin-example`
     "commands": ["hi"]
   },
   "peerDependencies": {
-    "toolsmith": "^0.1.0"
+    "@oleh-dev99/toolsmith": "^0.1.0"
   },
   "peerDependenciesMeta": {
-    "toolsmith": { "optional": true }
+    "@oleh-dev99/toolsmith": { "optional": true }
   }
 }
 ```
@@ -94,10 +94,10 @@ Give the range of toolsmith versions your plugin works with as a peer dependency
 ```json
 {
   "peerDependencies": {
-    "toolsmith": "^0.1.0"
+    "@oleh-dev99/toolsmith": "^0.1.0"
   },
   "peerDependenciesMeta": {
-    "toolsmith": { "optional": true }
+    "@oleh-dev99/toolsmith": { "optional": true }
   }
 }
 ```
@@ -112,7 +112,9 @@ warning: plugin toolsmith-plugin-hello-world was skipped: it needs toolsmith ^2.
 - toolsmith checks the range with [semver](https://github.com/npm/node-semver), the library npm uses. A range it can't read, like `"latest"`, also skips the plugin.
 - A prerelease of toolsmith, like `1.0.0-beta.1`, is compared like any other version, so a range like `>=0.1.0` includes it.
 
-Mark the peer dependency optional. npm installs peer dependencies by itself, and the name `toolsmith` on npm belongs to an unrelated package (see [Publishing](#publishing)), which `npm install` would otherwise fetch into your users' projects.
+Use toolsmith's npm name, `@oleh-dev99/toolsmith`, as the key. A range under the key `toolsmith` is ignored: that name on npm belongs to an unrelated package.
+
+Mark the peer dependency optional. npm installs peer dependencies by itself, so otherwise it would add a second copy of toolsmith to every project that uses your plugin, even for people who have toolsmith installed globally.
 
 ## Name clashes
 
@@ -184,7 +186,7 @@ npm links the folder instead of copying it, so your changes show up in toolsmith
 
 ## Publishing
 
-> **toolsmith's npm package name will change before it's published.** toolsmith isn't on npm yet, and the name `toolsmith` there belongs to an unrelated package. When toolsmith is published under its own name, that name replaces `toolsmith` in the peer dependency above, and this guide and the example plugin will be updated. Until then, keep the peer dependency optional, as shown.
+> **toolsmith isn't on npm yet.** It will be published as `@oleh-dev99/toolsmith`, and the command will still be `toolsmith`. Until then, `npm install` fails with a 404 for a packaged plugin whose peer dependency is required, which is one more reason to keep it optional, as shown.
 
 Publish a plugin like any npm package (`npm publish`). Before you do:
 

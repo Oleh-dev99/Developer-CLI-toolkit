@@ -6,7 +6,7 @@ A command-line toolkit for developers, built with Node.js.
 
 ## Usage
 
-toolsmith isn't on npm yet; the name `toolsmith` there belongs to an unrelated package, so it will be published under a new name. Until then, run it from a clone of this repository. Install the dependencies first:
+toolsmith isn't on npm yet. It will be published as `@oleh-dev99/toolsmith`, and the command will still be `toolsmith`. Until then, run it from a clone of this repository. Install the dependencies first:
 
 ```sh
 npm install

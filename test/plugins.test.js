@@ -1,8 +1,16 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { cpSync, mkdirSync, readFileSync, symlinkSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
-import { makeTree, pluginPackage as plugin, pluginSays as says, runCli, writeTempConfig } from "./helpers.js";
+import { fileURLToPath } from "node:url";
+import {
+  makeTree,
+  pluginPackage as plugin,
+  pluginSays as says,
+  runCli,
+  tempDir,
+  writeTempConfig,
+} from "./helpers.js";
 
 const { version } = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
 
@@ -193,5 +201,43 @@ test("a plugin whose peerDependencies leave out this toolsmith version is skippe
     assert.equal(code, 0, stderr);
     assert.equal(stdout, output);
     assert.equal(stderr, warnings);
+  }
+});
+
+test("a range under the old toolsmith key isn't read, because that's an unrelated package on npm", async (t) => {
+  const packageJson = JSON.stringify({
+    name: "toolsmith-plugin-old-key",
+    version: "1.0.0",
+    type: "module",
+    peerDependencies: { toolsmith: ">=99.0.0" },
+  });
+  const cwd = makeTree(t, plugin("toolsmith-plugin-old-key", says("old-key", "still loads"), { packageJson }));
+  const { stdout, stderr, code } = await runCli(["old-key"], { cwd });
+  assert.equal(code, 0, stderr);
+  assert.equal(stderr, "");
+  assert.equal(stdout, "still loads\n");
+});
+
+test("global plugins are found next to an installed toolsmith, scoped or not", async (t) => {
+  const root = fileURLToPath(new URL("..", import.meta.url));
+  const { dependencies } = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
+  for (const installName of ["@oleh-dev99/toolsmith", "toolsmith"]) {
+    // A copy of toolsmith with its dependencies and a plugin next to it, as
+    // `npm install --global` leaves them.
+    const folder = makeTree(t, plugin("toolsmith-plugin-wave", says("wave", "waved")));
+    const modules = join(folder, "node_modules");
+    const installed = join(modules, ...installName.split("/"));
+    mkdirSync(installed, { recursive: true });
+    for (const item of ["bin", "src", "package.json"]) {
+      cpSync(join(root, item), join(installed, item), { recursive: true });
+    }
+    for (const dependency of Object.keys(dependencies)) {
+      symlinkSync(join(root, "node_modules", dependency), join(modules, dependency), "junction");
+    }
+
+    const script = join(installed, "bin", "toolsmith.js");
+    const { stdout, stderr, code } = await runCli(["wave"], { cwd: tempDir(t), script });
+    assert.equal(code, 0, stderr);
+    assert.equal(stdout, "waved\n");
   }
 });

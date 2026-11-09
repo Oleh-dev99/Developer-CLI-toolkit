@@ -21,10 +21,10 @@
     ]
   },
   "peerDependencies": {
-    "toolsmith": "^0.1.0"
+    "@oleh-dev99/toolsmith": "^0.1.0"
   },
   "peerDependenciesMeta": {
-    "toolsmith": {
+    "@oleh-dev99/toolsmith": {
       "optional": true
     }
   },

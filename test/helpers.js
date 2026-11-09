@@ -1,12 +1,13 @@
 import { execFileSync, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { linkSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { linkSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
 import { PassThrough, Writable } from "node:stream";
 import { fileURLToPath } from "node:url";
 
 const bin = fileURLToPath(new URL("../bin/toolsmith.js", import.meta.url));
+const { name: toolsmithPackage } = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
 
 // The fake npm (see fixtures/fake-npm/npm) is in this folder, which runCli puts
 // first on the PATH. It writes its arguments to fake-npm.txt in the folder it
@@ -43,9 +44,9 @@ export function promptStreams(answers) {
 // anything). npm_config_prefix, where global plugins are looked for, points to
 // a temp path too, unless a test sets it. Set a variable to undefined in `env`
 // to remove it, and PATH to replace the whole PATH. `cwd` sets the folder the
-// CLI runs in, and `input` is typed into the CLI (otherwise its input is
-// empty).
-export function runCli(args, { env = {}, cwd, input } = {}) {
+// CLI runs in, `input` is typed into the CLI (otherwise its input is empty),
+// and `script` runs another copy of toolsmith.
+export function runCli(args, { env = {}, cwd, input, script = bin } = {}) {
   const childEnv = {};
   for (const [key, value] of Object.entries(process.env)) {
     // Windows spells it "Path"; one spelling lets `env` replace it. npm's
@@ -65,7 +66,7 @@ export function runCli(args, { env = {}, cwd, input } = {}) {
   childEnv.npm_config_prefix ||= join(tmpdir(), `toolsmith-no-npm-prefix-${randomUUID()}`);
 
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [bin, ...args], {
+    const child = spawn(process.execPath, [script, ...args], {
       cwd,
       env: childEnv,
       stdio: [input === undefined ? "ignore" : "pipe", "pipe", "pipe"],
@@ -107,7 +108,7 @@ export function pluginPackage(name, code, options = {}) {
     name,
     version,
     type: "module",
-    ...(toolsmith && { peerDependencies: { toolsmith } }),
+    ...(toolsmith && { peerDependencies: { [toolsmithPackage]: toolsmith } }),
     ...(commands && { toolsmith: { commands } }),
   };
   return {
