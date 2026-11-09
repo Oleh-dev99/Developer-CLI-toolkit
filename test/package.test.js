@@ -1,25 +1,13 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { basename, dirname, join, relative, sep } from "node:path";
+import { readdirSync, readFileSync } from "node:fs";
+import { join, relative, sep } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { tempDir } from "./helpers.js";
+import { npmCli, tempDir } from "./helpers.js";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const packageJson = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
-
-// npm's own command-line script, run with node so that no shell is needed (npm
-// on Windows is a batch file): npm_execpath under "npm test", or else the npm
-// that comes with this Node.js.
-function npmCli() {
-  const candidates = [
-    process.env.npm_execpath,
-    join(dirname(process.execPath), "node_modules", "npm", "bin", "npm-cli.js"),
-    join(dirname(process.execPath), "..", "lib", "node_modules", "npm", "bin", "npm-cli.js"),
-  ];
-  return candidates.find((path) => path && basename(path) === "npm-cli.js" && existsSync(path));
-}
 
 // The files below `folder` in the repository, as paths from its root with "/".
 const filesIn = (folder) =>

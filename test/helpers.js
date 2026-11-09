@@ -1,8 +1,8 @@
 import { execFileSync, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { linkSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { delimiter, dirname, join } from "node:path";
+import { basename, delimiter, dirname, join } from "node:path";
 import { PassThrough, Writable } from "node:stream";
 import { fileURLToPath } from "node:url";
 
@@ -14,6 +14,19 @@ const { name: toolsmithPackage } = JSON.parse(readFileSync(new URL("../package.j
 // runs in, and a package-lock.json like npm does, and then fails with the exit
 // code in FAKE_NPM_EXIT_CODE if that's set.
 export const fakeNpmFolder = fileURLToPath(new URL("fixtures/fake-npm", import.meta.url));
+
+// npm's own command-line script, for the few tests that need the real npm. Run
+// it with node so that no shell is needed (npm on Windows is a batch file). It's
+// npm_execpath under "npm test", or else the npm that comes with this Node.js,
+// or undefined if there's neither.
+export function npmCli() {
+  const candidates = [
+    process.env.npm_execpath,
+    join(dirname(process.execPath), "node_modules", "npm", "bin", "npm-cli.js"),
+    join(dirname(process.execPath), "..", "lib", "node_modules", "npm", "bin", "npm-cli.js"),
+  ];
+  return candidates.find((path) => path && basename(path) === "npm-cli.js" && existsSync(path));
+}
 
 // For runCli: makes the CLI believe its input is a terminal, so it asks its
 // questions, and the test answers them through `input`.

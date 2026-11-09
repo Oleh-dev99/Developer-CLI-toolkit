@@ -1,0 +1,50 @@
+name: Release
+
+# Pushing a tag like v1.2.3 releases that version; see docs/RELEASING.md.
+on:
+  push:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test
+    uses: ./.github/workflows/ci.yml
+
+  publish:
+    name: Publish to npm and GitHub
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      # To create the GitHub Release.
+      contents: write
+      # For npm trusted publishing, so that no npm token is stored anywhere.
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+      # Trusted publishing needs npm 11.5.1 or later. Dependencies aren't
+      # installed here: packing needs none, and this job is able to publish.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "26.x"
+          registry-url: "https://registry.npmjs.org"
+          package-manager-cache: false
+      - name: Check the tag and get the release notes
+        run: node scripts/changelog.js notes "$GITHUB_REF_NAME" > release-notes.md
+      # A version that's already on npm is left alone: the very first one is
+      # published by hand, and re-running a failed release mustn't fail here.
+      - name: Publish to npm
+        run: |
+          name=$(node -p "require('./package.json').name")
+          version=$(node -p "require('./package.json').version")
+          if [ "$(npm view "$name@$version" version 2>/dev/null)" = "$version" ]; then
+            echo "$name@$version is already on npm."
+          else
+            npm publish
+          fi
+      - name: Create the GitHub Release
+        run: gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file release-notes.md --verify-tag
+        env:
+          GH_TOKEN: ${{ github.token }}

@@ -37,7 +37,9 @@
   },
   "scripts": {
     "test": "node --test \"test/**/*.test.js\"",
-    "test:coverage": "node --test --experimental-test-coverage \"test/**/*.test.js\""
+    "test:coverage": "node --test --experimental-test-coverage \"test/**/*.test.js\"",
+    "preversion": "node scripts/changelog.js check",
+    "version": "node scripts/changelog.js release && git add CHANGELOG.md"
   },
   "engines": {
     "node": ">=22.12"

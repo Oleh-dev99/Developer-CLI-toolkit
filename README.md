@@ -121,6 +121,8 @@ To write a plugin, see the [plugin author guide](docs/PLUGINS.md), and start fro
 
 `npm test` runs every test. The npm package holds only what toolsmith needs to run: `bin/`, `src/` and `templates/` (the `"files"` in `package.json`), with the README and the license. `npm pack --dry-run` lists it, and a test checks that the list is exactly that, so tests, docs and the example plugin never end up in the package.
 
+Changes are listed in the [changelog](CHANGELOG.md), and [docs/RELEASING.md](docs/RELEASING.md) explains how a version is released.
+
 ## Roadmap
 
 toolsmith is being built in twelve milestones, from the core command framework (M1) to shell integration and self-update (M12). See [ROADMAP.md](ROADMAP.md) for each milestone's goal and task checklist.

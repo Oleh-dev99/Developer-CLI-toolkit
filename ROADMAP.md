@@ -147,8 +147,8 @@ toolsmith is being built in twelve milestones. M1 is the foundation that every l
 - [x] Check that the name `toolsmith` is free on npm; if not, publish under a scope (e.g. `@your-npm-name/toolsmith`)
 - [x] Choose a license and add a `LICENSE` file
 - [x] Complete `package.json` (`description`, `license`, `repository`, `keywords`) and add a `files` list so only what's needed is published (check with `npm pack --dry-run`)
-- [ ] Release workflow: pushing a `vX.Y.Z` tag runs the tests and publishes to npm with trusted publishing (no npm token stored in GitHub)
-- [ ] Follow Semantic Versioning, keep a `CHANGELOG.md`, and create a GitHub Release for every version (notes drafted with `toolsmith git recent`)
+- [x] Release workflow: pushing a `vX.Y.Z` tag runs the tests and publishes to npm with trusted publishing (no npm token stored in GitHub)
+- [x] Follow Semantic Versioning, keep a `CHANGELOG.md`, and create a GitHub Release for every version (notes drafted with `toolsmith git recent`)
 
 ### Documentation site
 
