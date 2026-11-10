@@ -152,9 +152,9 @@ toolsmith is being built in twelve milestones. M1 is the foundation that every l
 
 ### Documentation site
 
-- [ ] Docs site (e.g. VitePress) deployed automatically to GitHub Pages from `main`
-- [ ] Pages for getting started, every command, configuration and plugin authoring
-- [ ] Generate the command reference from the CLI's own `--help` definitions, so it never goes out of date
+- [x] Docs site (e.g. VitePress) deployed automatically to GitHub Pages from `main`
+- [x] Pages for getting started, every command, configuration and plugin authoring
+- [x] Generate the command reference from the CLI's own `--help` definitions, so it never goes out of date
 
 ## M7 — Interactive TUI
 

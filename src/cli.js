@@ -45,38 +45,25 @@ export async function run(argv) {
   // Commands read context.config, which is set just before they run.
   const context = {};
 
-  const program = new Command()
-    .name("toolsmith")
-    .description("A command-line toolkit for developers")
-    .version(version)
-    .option("--debug", "show stack traces for errors")
-    .option("--no-color", "disable colored output")
-    .configureOutput({
-      // Commander's messages already start with "error: ".
-      outputError: (message) => error(message.replace(/^error: /, "").trimEnd()),
-    })
-    .hook("preAction", () => {
-      if (configError) {
-        throw configError;
-      }
-      for (const warning of config.warnings) {
-        warn(warning);
-      }
-      // Command-line flags override the config file.
-      const settings = { ...config.settings };
-      if (!program.opts().color) {
-        settings.color = false;
-      }
-      context.config = { path: config.path, found: config.found, settings };
-    });
+  const program = createProgram(context).hook("preAction", () => {
+    if (configError) {
+      throw configError;
+    }
+    for (const warning of config.warnings) {
+      warn(warning);
+    }
+    // Command-line flags override the config file.
+    const settings = { ...config.settings };
+    if (!program.opts().color) {
+      settings.color = false;
+    }
+    context.config = { path: config.path, found: config.found, settings };
+  });
 
   // Runs as soon as the flag is parsed, so it also covers usage errors that
   // Commander reports before any command runs.
   program.on("option:no-color", disableColor);
 
-  for (const command of commands) {
-    command.register(program, context);
-  }
   // Plugins load only with a config file that could be read, because it may
   // turn some of them off. Those that list their commands are imported only
   // when needed: for the command being run, or all of them for help and for
@@ -107,6 +94,29 @@ export async function run(argv) {
     }
     process.exitCode = 1;
   }
+}
+
+// toolsmith with its built-in commands, but without plugins and without
+// reading the config file. run() adds those. The command reference in the docs
+// is made from this too (scripts/command-reference.js), so it says exactly what
+// --help says.
+export function createProgram(context = {}) {
+  const program = new Command()
+    .name("toolsmith")
+    .description("A command-line toolkit for developers")
+    .version(version)
+    .option("--debug", "show stack traces for errors")
+    .option("--no-color", "disable colored output")
+    .configureOutput({
+      // Commander's messages already start with "error: ".
+      outputError: (message) => error(message.replace(/^error: /, "").trimEnd()),
+    });
+  // Commands copy the output settings above when they're added, so they're
+  // added after them.
+  for (const command of commands) {
+    command.register(program, context);
+  }
+  return program;
 }
 
 // What the arguments after "toolsmith" ask for, read the way Commander reads

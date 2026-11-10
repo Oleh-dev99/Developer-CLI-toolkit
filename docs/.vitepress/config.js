@@ -21,6 +21,7 @@ export default {
   themeConfig: {
     nav: [
       { text: "Guide", link: "/getting-started" },
+      { text: "Commands", link: "/commands" },
       { text: "Plugins", link: "/plugins" },
       { text: "Changelog", link: `${repository}/blob/main/CHANGELOG.md` },
     ],
@@ -31,6 +32,11 @@ export default {
           { text: "Getting started", link: "/getting-started" },
           { text: "Configuration", link: "/configuration" },
         ],
+      },
+      {
+        // Made from the CLI's own --help by `npm run docs:commands`.
+        text: "Reference",
+        items: [{ text: "Commands", link: "/commands" }],
       },
       {
         text: "Plugins",

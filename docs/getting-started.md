@@ -25,6 +25,8 @@ toolsmith new --help
 toolsmith git recent --help
 ```
 
+The [command reference](./commands.md) has the same help for every command on one page.
+
 Commands that report data, like `size`, `dupes`, `git recent` and `plugins`, can print it as JSON with `--json`. Two options work with every command: `--no-color` turns colors off, and `--debug` shows the stack trace of an error.
 
 ## Create a project
@@ -93,7 +95,7 @@ toolsmith rename IMG_ photo_
 - `dupes` finds files with identical content. It only reports them, and never deletes anything.
 - `rename` replaces text in file names. It renames straight away, so use `--dry-run` first to see the new names. If any new name would clash with another file, nothing is renamed.
 
-All three skip `.git` and `node_modules`. `dupes` and `rename` also take files, folders or quoted patterns like `'*.jpg'`; see their `--help` for the details.
+All three skip `.git` and `node_modules`. `dupes` and `rename` also take files, folders or quoted patterns like `'*.jpg'`; see [dupes](./commands.md#toolsmith-dupes) and [rename](./commands.md#toolsmith-rename) in the command reference for the details.
 
 ## Add plugins
 
@@ -110,5 +112,6 @@ A plugin is a program that runs with your full user permissions: it can read and
 
 ## Next steps
 
+- [Command reference](./commands.md): every command, with its arguments and options.
 - [Configuration](./configuration.md): every setting in `~/.toolsmithrc`.
 - [Writing plugins](./plugins.md): add your own commands.

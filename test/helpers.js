@@ -94,6 +94,25 @@ export function runCli(args, { env = {}, cwd, input, script = bin } = {}) {
   });
 }
 
+// What `toolsmith <words> --help` lists: its commands' names (with "help"),
+// and the terms of its arguments and options, like "paths" and "--depth <n>".
+export async function helpListing(...words) {
+  const { stdout, stderr, code } = await runCli([...words, "--help"]);
+  if (code !== 0) {
+    throw new Error(`toolsmith ${words.join(" ")} --help failed: ${stderr}`);
+  }
+  // The terms start two spaces in; descriptions that wrap start further in.
+  const terms = (title) => {
+    const block = stdout.match(new RegExp(`^${title}:\\r?\\n((?: .*(?:\\r?\\n|$))*)`, "m"))?.[1] ?? "";
+    return [...block.matchAll(/^ {2}(\S.*?)(?: {2,}|\r?$)/gm)].map(([, term]) => term);
+  };
+  return {
+    commands: terms("Commands").map((term) => term.split(" ")[0]),
+    arguments: terms("Arguments"),
+    options: terms("Options"),
+  };
+}
+
 // Creates a temp folder that is deleted when the test `t` finishes.
 export function tempDir(t) {
   const dir = mkdtempSync(join(tmpdir(), "toolsmith-test-"));

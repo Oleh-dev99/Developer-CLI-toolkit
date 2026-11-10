@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import site from "../docs/.vitepress/config.js";
-import { runCli } from "./helpers.js";
+import { helpListing, runCli } from "./helpers.js";
 
 // These tests read the site's pages and settings. Building it needs VitePress,
 // which the docs workflow installs; the tests don't.
@@ -13,13 +13,6 @@ const root = fileURLToPath(new URL("..", import.meta.url));
 const docs = join(root, "docs");
 const read = (...parts) => readFileSync(join(...parts), "utf8");
 const packageJson = JSON.parse(read(root, "package.json"));
-
-// The command names that `toolsmith <words> --help` lists under "Commands:".
-async function commandNames(...words) {
-  const { stdout, code } = await runCli([...words, "--help"]);
-  assert.equal(code, 0);
-  return [...stdout.split("Commands:")[1].matchAll(/^ {2}(\S+)/gm)].map(([, name]) => name);
-}
 
 // The lines of a page's ```sh code blocks.
 const shellLines = (page) =>
@@ -56,8 +49,8 @@ test("getting started installs the published package, on the Node.js versions it
 });
 
 test("every toolsmith command in the guide's examples exists", async () => {
-  const builtIn = await commandNames();
-  const git = await commandNames("git");
+  const builtIn = (await helpListing()).commands;
+  const git = (await helpListing("git")).commands;
   const examples = ["getting-started.md", "configuration.md"]
     .flatMap((page) => shellLines(read(docs, page)))
     .filter((line) => line.startsWith("toolsmith "))

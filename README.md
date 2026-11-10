@@ -13,7 +13,7 @@ npm install --global @oleh-dev99/toolsmith
 toolsmith --help
 ```
 
-The [documentation site](https://oleh-dev99.github.io/Developer-CLI-toolkit/) has a getting-started guide, every setting, and the plugin author guide.
+The [documentation site](https://oleh-dev99.github.io/Developer-CLI-toolkit/) has a getting-started guide, a [reference for every command](https://oleh-dev99.github.io/Developer-CLI-toolkit/commands.html), every setting, and the plugin author guide.
 
 ### Create a project from a template
 
@@ -125,6 +125,8 @@ cd docs
 npm ci
 npm run dev
 ```
+
+The command reference, `docs/commands.md`, is made from toolsmith's own command definitions, so it shows what `--help` shows. After changing a command's arguments, options or help text, update it with `npm run docs:commands`; until you do, a test fails.
 
 Every push to `main` publishes the site to GitHub Pages with the [docs workflow](.github/workflows/docs.yml).
 
