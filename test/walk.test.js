@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
-import { chmodSync, symlinkSync } from "node:fs";
+import { symlinkSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { stripVTControlCharacters } from "node:util";
 import { walk } from "../src/lib/walk.js";
-import { makeTree, tempDir } from "./helpers.js";
+import { canLockFolders, makeTree, tempDir, whileLocked } from "./helpers.js";
 
 // The walker's entries as [relativePath, type] pairs.
 async function list(root, options) {
@@ -98,22 +98,14 @@ test("symlinks are listed but not followed, so a loop can't hang the walk", asyn
   ]);
 });
 
-const canLockFolders = process.platform !== "win32" && process.getuid?.() !== 0;
-
 test(
   "an unreadable folder is skipped with a warning",
-  { skip: !canLockFolders && "needs macOS or Linux and a non-root user" },
+  { skip: !canLockFolders() && "this user can read every folder (root, or on Windows with the backup privilege on)" },
   async (t) => {
     const root = makeTree(t, { "locked/secret.txt": "x", "open.txt": "y" });
     const locked = join(root, "locked");
     const errorOutput = t.mock.method(console, "error", () => {});
-    chmodSync(locked, 0o000);
-    let entries;
-    try {
-      entries = await list(root);
-    } finally {
-      chmodSync(locked, 0o755);
-    }
+    const entries = await whileLocked(locked, () => list(root));
     assert.deepEqual(entries, [
       ["locked", "directory"],
       ["open.txt", "file"],
@@ -123,9 +115,11 @@ test(
   },
 );
 
-test("a root folder that can't be read is an error", async (t) => {
+test("a root folder that can't be read is an error, with the file system's error as its cause", async (t) => {
   const missing = join(tempDir(t), "missing");
-  await assert.rejects(Array.fromAsync(walk(missing)), {
-    message: `can't read folder ${missing} (not found)`,
+  await assert.rejects(Array.fromAsync(walk(missing)), (err) => {
+    assert.equal(err.message, `can't read folder ${missing} (not found)`);
+    assert.equal(err.cause?.code, "ENOENT");
+    return true;
   });
 });

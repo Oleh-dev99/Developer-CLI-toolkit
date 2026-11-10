@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { createProgram } from "../src/cli.js";
@@ -10,7 +11,7 @@ import { describeCommands } from "../src/tui/commands.js";
 import { createDashboard } from "../src/tui/dashboard.js";
 import { hintsFor } from "../src/tui/keys.js";
 import { createGitStatus, findRepository, parseStatus, statusRows } from "../src/tui/status.js";
-import { changeOf, watchTree } from "../src/tui/watch.js";
+import { aboutOneEntry, changeOf, watchTree } from "../src/tui/watch.js";
 import { fakeTerminal, makeRepo, makeTree, pressKeys, tempDir } from "./helpers.js";
 
 // The Git status panel of `toolsmith ui` (src/tui/status.js), following
@@ -368,6 +369,26 @@ test("what the watcher counts as a change: node_modules, git's objects and lock 
   assert.deepEqual(changeOf("docs", "docs/"), { files: true });
   assert.deepEqual(changeOf("src/app.js", "docs/"), { files: false });
   assert.deepEqual(changeOf("docs-old/x.md", "docs/"), { files: false });
+});
+
+test("the watcher goes on after an error about one entry in the tree, which Node's watcher on Linux reports", () => {
+  const root = join(tmpdir(), "project");
+  // As Node's fs.watch reports them: the errors of the watcher on Linux name
+  // the entry by its full path, those of macOS's and Windows' by its name in
+  // the tree, if at all, and mean they've stopped.
+  const error = (code, syscall, path) => Object.assign(new Error(`${code}: ${syscall} ${path}`), { code, syscall, path });
+  assert.equal(aboutOneEntry(error("EACCES", "scandir", join(root, "locked")), root), true);
+  assert.equal(aboutOneEntry(error("EACCES", "watch", join(root, "src", "locked")), root), true);
+  assert.equal(aboutOneEntry(error("EPERM", "scandir", join(root, "locked")), root), true);
+  assert.equal(aboutOneEntry(error("ENOENT", "scandir", join(root, "deleted")), root), true);
+  assert.equal(aboutOneEntry(error("EACCES", "scandir", join(root, "..locked")), root), true);
+  // Errors that stop the watch.
+  assert.equal(aboutOneEntry(error("ENOSPC", "watch", join(root, "src")), root), false);
+  assert.equal(aboutOneEntry(error("EPERM", "watch", "locked"), root), false);
+  assert.equal(aboutOneEntry(error("EPERM", "watch", undefined), root), false);
+  assert.equal(aboutOneEntry(error("EACCES", "scandir", root), root), false);
+  assert.equal(aboutOneEntry(error("EACCES", "scandir", join(root, "..", "elsewhere")), root), false);
+  assert.equal(aboutOneEntry(error("EACCES", "scandir", `${root}-old`), root), false);
 });
 
 test("the watcher groups a burst of changes into one, ignores node_modules, and stops when closed", async (t) => {

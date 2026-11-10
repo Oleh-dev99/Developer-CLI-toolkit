@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { EventEmitter } from "node:events";
-import { chmodSync, existsSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { monitorEventLoopDelay } from "node:perf_hooks";
 import { test } from "node:test";
@@ -15,7 +15,7 @@ import { editorCommand, openerFor, openWithApp } from "../src/tui/open.js";
 import { previewLimit, readPreview } from "../src/tui/preview.js";
 import { plainLine, terminal, width } from "../src/tui/screen.js";
 import { createTree } from "../src/tui/tree.js";
-import { fakeTerminal, makeTree, pressKeys, tempDir } from "./helpers.js";
+import { canLockFolders, fakeTerminal, makeTree, pressKeys, tempDir, whileLocked } from "./helpers.js";
 
 // The Files panel of `toolsmith ui`: the folder tree (src/tui/tree.js), file
 // previews (src/tui/preview.js), opening files (src/tui/open.js), and the file
@@ -288,21 +288,60 @@ test("reading a big open folder again doesn't hold up the keys", async (t) => {
   assert.ok(delay.max < 250e6, `the event loop was held up for ${Math.round(delay.max / 1e6)} ms`);
 });
 
-test("an unreadable folder is a warning, not an error", { skip: windows || process.getuid?.() === 0 ? "needs file permissions that aren't Windows', and not root" : false }, async (t) => {
+const lockable = { skip: !canLockFolders() && "this user can read every folder (root, or on Windows with the backup privilege on)" };
+const bottomRow = (ui) => ui.screen().split("\n").at(-1);
+
+test("an unreadable folder is a warning, not an error, that names it as the Files panel does", lockable, async (t) => {
   const ui = await session(t, { files: { ...project, "locked/secret.txt": "s" } });
   const locked = join(ui.cwd, "locked");
-  chmodSync(locked, 0o000);
-  t.after(() => chmodSync(locked, 0o755));
-  await ui.select("locked");
-  await ui.press(key.right);
-  await ui.until(/locked\/ +can't read/, "the warning in the tree");
-  assert.match(ui.screen(), /warning: can't read folder .*locked \(permission denied\)/);
-  // The walker reports to its caller, and prints nothing itself.
+  await whileLocked(locked, async () => {
+    await ui.select("locked");
+    await ui.press(key.right);
+    await ui.until(/locked\/ +can't read/, "the warning in the tree");
+    // By its path from the panel's folder, not from the root of the disk,
+    // so that the reason fits on the bottom row wherever the folder is.
+    assert.equal(bottomRow(ui), " warning: can't read folder locked (permission denied)");
+    // The walker reports to its caller, and prints nothing itself.
+    const warnings = [];
+    for await (const entry of walk(ui.cwd, { onWarning: (message) => warnings.push(message) })) {
+      assert.ok(entry);
+    }
+    assert.deepEqual(warnings, [`skipped ${locked} (permission denied)`]);
+  });
+});
+
+test("a folder locked while the dashboard runs doesn't stop the Files list following changes, and isn't reported again", lockable, async (t) => {
+  const ui = await session(t, { files: { ...project, "locked/secret.txt": "s" } });
+  const warning = " warning: can't read folder locked (permission denied)";
+  await whileLocked(join(ui.cwd, "locked"), async () => {
+    await ui.select("locked");
+    await ui.press(key.right);
+    await ui.until(/locked\/ +can't read/, "the warning in the tree");
+    assert.equal(bottomRow(ui), warning);
+    // On Linux, Node's watcher reports the folder it can't list any more as
+    // an error, and goes on watching everything else; so does the dashboard.
+    writeFileSync(join(ui.cwd, "after.txt"), "after");
+    await ui.until(/after\.txt +5 B/, "the new file");
+    // The sizes are added up again, without the locked folder, and that
+    // isn't reported over what the dashboard said last.
+    await until(() => ui.view.tree.totalSize() === 10 + 159 + 1000 + 16 + 5, "the sizes without the locked folder");
+    assert.equal(bottomRow(ui), warning);
+  });
+});
+
+test("a folder that can't be read from the start is reported once, by its path from the panel's folder", lockable, async (t) => {
+  const root = makeTree(t, { "locked/secret.txt": "s", "open.txt": "o" });
   const warnings = [];
-  for await (const entry of walk(ui.cwd, { onWarning: (message) => warnings.push(message) })) {
-    assert.ok(entry);
-  }
-  assert.deepEqual(warnings, [`skipped ${locked} (permission denied)`]);
+  await whileLocked(join(root, "locked"), async () => {
+    const tree = createTree(root, { onWarning: (message) => warnings.push(message) });
+    t.after(() => tree.stop());
+    await until(() => tree.totalSize() !== undefined, "the sizes");
+    // Not again when files change.
+    await tree.reload();
+    await tree.remeasure();
+    assert.equal(tree.totalSize(), 1);
+  });
+  assert.deepEqual(warnings, ["skipped locked (permission denied)"]);
 });
 
 test("a symlink is shown, but never followed", async (t) => {

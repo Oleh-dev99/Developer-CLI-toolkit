@@ -1,6 +1,7 @@
+import { relative, sep } from "node:path";
 import { skipFolders } from "../lib/files.js";
 import { formatSize } from "../lib/format.js";
-import { walk } from "../lib/walk.js";
+import { fsErrorReason, walk } from "../lib/walk.js";
 import { createList } from "./list.js";
 import { printable, spread, width } from "./screen.js";
 
@@ -15,12 +16,18 @@ import { printable, spread, width } from "./screen.js";
 // reload() reads the open folders again, in the background too.
 
 // `onChange` is called when there's something new to show; `onWarning` with a
-// message for each entry that couldn't be read.
+// message for each entry that couldn't be read. Messages name entries the way
+// the panel does, by their path from `root`, so that the reason still fits on
+// a line when `root` itself is deep down.
 export function createTree(root, { onChange = () => {}, onWarning = () => {}, ignore = skipFolders } = {}) {
   const top = { name: "", relativePath: "", path: root, type: "directory", depth: -1, open: true, children: null };
   // Folder sizes: relative path → bytes, once they're known.
   const sizes = new Map();
   let stopped = false;
+
+  // For walk()'s onWarning: an entry it skipped, named from `root`.
+  const skipped = (message, err) =>
+    onWarning(err?.path ? `skipped ${relative(root, err.path).split(sep).join("/")} (${fsErrorReason(err)})` : message);
 
   // Each row: the entry's name, indented by its depth, with "+" for a closed
   // folder and "-" for an open one, and its size at the right where there's
@@ -89,7 +96,7 @@ export function createTree(root, { onChange = () => {}, onWarning = () => {}, ig
     refresh();
     try {
       let count = 0;
-      for await (const entry of walk(folder.path, { recursive: false, ignore, onWarning })) {
+      for await (const entry of walk(folder.path, { recursive: false, ignore, onWarning: skipped })) {
         if (stopped) {
           return;
         }
@@ -101,7 +108,8 @@ export function createTree(root, { onChange = () => {}, onWarning = () => {}, ig
       }
     } catch (err) {
       folder.error = err.message;
-      onWarning(err.message);
+      const reason = fsErrorReason(err.cause ?? err);
+      onWarning(folder === top ? `can't read this folder (${reason})` : `can't read folder ${folder.relativePath} (${reason})`);
     } finally {
       folder.loading = false;
       refresh();
@@ -225,10 +233,14 @@ export function createTree(root, { onChange = () => {}, onWarning = () => {}, ig
   // only, hard links once. The walk goes depth first, in order, so a folder's
   // size is final as soon as an entry outside it comes up. Sizes from an
   // earlier walk stay until the new ones replace them, and a newer walk stops
-  // an older one.
+  // an older one. Only the first walk reports what it can't read, as reread()
+  // does: the walks after files changed would say it again on every change,
+  // anywhere, over whatever the dashboard last said. A folder that can't be
+  // read any more is still reported when it's opened, by load().
   let measuring = 0;
   async function measure() {
     const generation = ++measuring;
+    const report = generation === 1 ? skipped : () => {};
     const counted = new Set();
     const open = []; // the folders the walk is in, outermost first: [path, size]
     const close = (until) => {
@@ -243,7 +255,7 @@ export function createTree(root, { onChange = () => {}, onWarning = () => {}, ig
     };
     open.push(["", 0]);
     try {
-      for await (const entry of walk(root, { ignore, onWarning })) {
+      for await (const entry of walk(root, { ignore, onWarning: report })) {
         if (stopped || generation !== measuring) {
           return;
         }
@@ -259,8 +271,8 @@ export function createTree(root, { onChange = () => {}, onWarning = () => {}, ig
         }
       }
       close(0);
-    } catch (err) {
-      onWarning(err.message);
+    } catch {
+      // `root` itself can't be read; load() says so.
     }
   }
 

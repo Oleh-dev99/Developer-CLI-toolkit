@@ -1,7 +1,7 @@
 import { execFileSync, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { EventEmitter } from "node:events";
-import { existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, linkSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, delimiter, dirname, join } from "node:path";
 import { PassThrough, Writable } from "node:stream";
@@ -177,6 +177,54 @@ export function tempDir(t) {
     }
   });
   return dir;
+}
+
+// Locks `folder`, so that its entries can't be listed, and returns what
+// unlocks it: chmod 000 on macOS and Linux, and on Windows denying everyone
+// the right to list it (Node then gets EPERM, whose reason is "permission
+// denied" too).
+function lock(folder) {
+  if (process.platform === "win32") {
+    execFileSync("icacls", [folder, "/deny", "*S-1-1-0:(RD)"], { stdio: "ignore" });
+    return () => execFileSync("icacls", [folder, "/remove:d", "*S-1-1-0"], { stdio: "ignore" });
+  }
+  chmodSync(folder, 0o000);
+  return () => chmodSync(folder, 0o755);
+}
+
+// Whether whileLocked() keeps this process out of a folder, found out once by
+// trying. It doesn't for root on macOS and Linux, nor on Windows with the
+// backup privilege turned on, as Git Bash turns it on for an administrator
+// (and the programs it starts inherit it): both read every folder.
+let lockable;
+export function canLockFolders() {
+  if (lockable === undefined) {
+    const folder = mkdtempSync(join(tmpdir(), "toolsmith-lock-"));
+    const unlock = lock(folder);
+    try {
+      readdirSync(folder);
+      lockable = false;
+    } catch {
+      lockable = true;
+    } finally {
+      unlock();
+      rmSync(folder, { recursive: true, force: true });
+    }
+  }
+  return lockable;
+}
+
+// Runs `task` with `folder` locked (see lock()), and unlocks it after, even
+// when `task` fails. The folder is unlocked before the test ends, so that the
+// temp folder it's in can be deleted: t.after() runs hooks in the order they
+// were registered, which puts deleting the temp folder first.
+export async function whileLocked(folder, task) {
+  const unlock = lock(folder);
+  try {
+    return await task();
+  } finally {
+    unlock();
+  }
 }
 
 // For runCli: a git config of its own, with Grace Hopper as the user, so the

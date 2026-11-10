@@ -20,7 +20,8 @@ import { warn } from "../output.js";
 //              error (default: the message is printed as a warning)
 //
 // Symlinks are listed but never followed, so a link can't cause a loop.
-// Anything below the root that can't be read is skipped with a warning.
+// Anything below the root that can't be read is skipped with a warning. A root
+// that can't be read is an error, with the file system's error as its cause.
 export async function* walk(root, { recursive = true, maxDepth = Infinity, ignore = [], onWarning = warn } = {}) {
   const isIgnored = await ignoreMatcher(ignore);
   const depthLimit = recursive ? maxDepth : 1;
@@ -62,7 +63,7 @@ export async function* walk(root, { recursive = true, maxDepth = Infinity, ignor
   try {
     rootEntries = await readFolder(rootPath);
   } catch (err) {
-    throw new Error(`can't read folder ${rootPath} (${fsErrorReason(err)})`);
+    throw new Error(`can't read folder ${rootPath} (${fsErrorReason(err)})`, { cause: err });
   }
   yield* walkFolder(rootPath, "", rootEntries, 1);
 }

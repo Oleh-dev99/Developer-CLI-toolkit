@@ -1,4 +1,5 @@
 import { watch } from "node:fs";
+import { isAbsolute, relative, resolve, sep } from "node:path";
 
 // Watching the folder tree for toolsmith ui, so that the Files panel and the
 // Git status panel keep up with changes made outside it.
@@ -13,7 +14,8 @@ import { watch } from "node:fs";
 // commit also shows elsewhere) and to git's lock files are ignored. On Linux,
 // Node watches every folder for this, node_modules too, and only the changes
 // there are ignored. Errors, like running out of watches, go to `onError`;
-// nothing is watched then.
+// nothing is watched then. An error about one entry in the tree, which only
+// Linux has (see aboutOneEntry), isn't one of them: watching goes on.
 export function watchTree(root, { onChange, onError = () => {}, filesIn = "", quiet = 150, longest = 1000 }) {
   const pending = { files: false, git: false };
   let timer = null;
@@ -46,6 +48,9 @@ export function watchTree(root, { onChange, onError = () => {}, filesIn = "", qu
       }
     });
     watcher.on("error", (err) => {
+      if (aboutOneEntry(err, root)) {
+        return;
+      }
       onError(err);
       watcher.close();
     });
@@ -58,6 +63,24 @@ export function watchTree(root, { onChange, onError = () => {}, filesIn = "", qu
       watcher?.close();
     },
   };
+}
+
+// Whether a watcher's error `err` is only about one entry in the tree under
+// `root`, so that watching can go on. On macOS and Windows, one fs.watch
+// watches the whole tree, and its error means it has stopped; the error's path
+// is then a name relative to `root`, if there's one. On Linux, where the system
+// can't watch a whole tree, Node watches each folder and file in it by itself,
+// lists a folder again when it changes, and when it can't list or watch one,
+// it reports that as an error with the entry's full path, and goes on watching
+// all the others: EACCES (or EPERM) for a folder that was locked, like with
+// chmod 000, and, on Node 22, ENOENT for one that was just deleted. Nothing in
+// such a folder could be shown anyway.
+export function aboutOneEntry(err, root) {
+  if (!["EACCES", "EPERM", "ENOENT"].includes(err?.code) || typeof err.path !== "string" || !isAbsolute(err.path)) {
+    return false;
+  }
+  const path = relative(resolve(root), err.path);
+  return path !== "" && path !== ".." && !path.startsWith(`..${sep}`) && !isAbsolute(path);
 }
 
 // What a change to `path` (relative to the watched folder, with "/", or ""
