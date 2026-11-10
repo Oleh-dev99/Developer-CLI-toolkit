@@ -1,5 +1,6 @@
 import { execFileSync, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import { EventEmitter } from "node:events";
 import { existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, delimiter, dirname, join } from "node:path";
@@ -39,6 +40,42 @@ export const terminalEnv = {
 export const screenTerminalEnv = {
   NODE_OPTIONS: `--import "${new URL("fixtures/terminal.mjs", import.meta.url).href}"`,
 };
+
+// A pretend terminal for the UI's code (src/tui/app.js): input that can go into
+// raw mode, and output with a size and "resize" events. `events` has, in
+// order, everything written and every change of raw mode ("raw on", "raw off").
+export function fakeTerminal(columns = 60, rows = 15) {
+  const events = [];
+  const input = Object.assign(new PassThrough(), {
+    isTTY: true,
+    isRaw: false,
+    setRawMode(on) {
+      this.isRaw = on;
+      events.push(on ? "raw on" : "raw off");
+      return this;
+    },
+  });
+  const output = Object.assign(new EventEmitter(), {
+    isTTY: true,
+    columns,
+    rows,
+    write(text) {
+      events.push(text);
+      return true;
+    },
+  });
+  return { input, output, events };
+}
+
+// Types `keys` into a fakeTerminal() one at a time, each as the codes a
+// terminal sends, like "\x1b[A" for Up. A lone Esc only counts as Esc after a
+// short wait (see escapeTimeout in src/tui/app.js), so this waits for it.
+export async function pressKeys(term, ...keys) {
+  for (const key of keys) {
+    term.input.write(key);
+    await new Promise((resolve) => setTimeout(resolve, key === "\x1b" ? 150 : 1));
+  }
+}
 
 // Streams for createPrompt: `answers` are typed in all at once, then the input
 // ends; written() returns everything the prompt wrote.

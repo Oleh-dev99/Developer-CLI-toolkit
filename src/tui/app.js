@@ -1,45 +1,26 @@
 import { constants } from "node:os";
 import { basename } from "node:path";
 import { emitKeypressEvents } from "node:readline";
-import { center, createScreen, pad, paints, rowWidth, spread, terminal } from "./screen.js";
+import { createDashboard } from "./dashboard.js";
+import { createScreen, paints, terminal } from "./screen.js";
 
-// The full-screen UI of `toolsmith ui`. src/commands/ui.js imports this only
-// when that command runs, so other commands never load it.
+// The terminal side of `toolsmith ui`: the alternate screen, raw mode, resizes
+// and restoring the terminal. What's on screen and what keys do is up to the
+// view, src/tui/dashboard.js. src/commands/ui.js imports this only when that
+// command runs, so other commands never load it.
 
-// The smallest terminal the UI draws itself in; below it, it says so.
-export const minimum = { columns: 40, rows: 10 };
-
-// The panels that later parts of the UI fill in.
-const panels = ["Commands", "Files", "Git status"];
-
-// What the screen shows in a terminal of `size`, one string per row.
-export function layout(size, { paint, folder }) {
-  const { columns, rows } = size;
-  if (columns < minimum.columns || rows < minimum.rows) {
-    const message = ["Terminal too small", `${columns}x${rows}, needs at least ${minimum.columns}x${minimum.rows}`, "q: quit"];
-    const top = Math.max(0, Math.floor((rows - message.length) / 2));
-    return Array.from({ length: rows }, (_, row) => {
-      const text = center(message[row - top] ?? "", rowWidth(row, size));
-      return row === top ? paint.warning(text) : text;
-    });
-  }
-  const lines = [paint.bar(spread(" toolsmith ui", ` ${folder} `, columns)), pad("", columns)];
-  for (const panel of panels) {
-    lines.push(paint.accent(pad(`  ${panel}`, 16)) + pad("coming soon", columns - 16));
-  }
-  while (lines.length < rows - 1) {
-    lines.push(pad("", columns));
-  }
-  lines.push(paint.bar(pad(" q or Ctrl+C: quit", rowWidth(rows - 1, size))));
-  return lines;
-}
+// How long a lone Esc waits for the rest of a key's code before it counts as
+// Esc. Keys like Up arrive as Esc followed by more characters, at once.
+// Readline's own wait, half a second, makes Esc feel slow.
+const escapeTimeout = 50;
 
 // The UI on a terminal: `input` must be able to go into raw mode, and `output`
 // must have a size and "resize" events, as process.stdin and process.stdout do
-// in a terminal. `draw` turns a size into rows, like layout() above. start()
-// returns a promise that settles when the UI ends: it's rejected with the
-// error when something went wrong.
-export function createApp({ input, output, color = false, folder = "", draw = layout }) {
+// in a terminal. `view.render(size, paint)` gives the screen as one string per
+// row, and `view.key(text, key)` handles a readline "keypress" event,
+// returning "quit" to end the UI. start() returns a promise that settles when
+// the UI ends: it's rejected with the error when something went wrong.
+export function createApp({ input, output, color = false, view = createDashboard() }) {
   const paint = paints(color);
   const screen = createScreen(output);
   const size = () => ({ columns: output.columns ?? 0, rows: output.rows ?? 0 });
@@ -57,21 +38,23 @@ export function createApp({ input, output, color = false, folder = "", draw = la
         stop(err);
       }
     };
-  const render = guarded(() => screen.draw(draw(size(), { paint, folder })));
+  const render = guarded(() => screen.draw(view.render(size(), paint)));
   const onResize = guarded(() => {
     screen.clear();
     render();
   });
   const onKey = guarded((text, key = {}) => {
-    if (key.name === "q" || (key.ctrl && key.name === "c")) {
+    if (view.key(text, key) === "quit") {
       stop();
+    } else {
+      render();
     }
   });
 
   function start() {
     running = true;
     output.write(terminal.enterAlternateScreen + terminal.hideCursor + terminal.clear);
-    emitKeypressEvents(input);
+    emitKeypressEvents(input, { escapeCodeTimeout: escapeTimeout });
     input.setRawMode(true);
     input.on("keypress", onKey);
     output.on("resize", onResize);
@@ -85,7 +68,9 @@ export function createApp({ input, output, color = false, folder = "", draw = la
   // Windows console, turning raw mode off while the alternate screen is
   // showing ends the console itself. Every step is tried even when one
   // before it fails, as it does when the terminal is already gone. Safe to
-  // call more than once.
+  // call more than once. (With Node.js 22, that console comes back in plain
+  // line mode rather than exactly as it was: QuickEdit and insert mode are
+  // off. Node 26 restores it exactly, and JavaScript can't set it.)
   function stop(error) {
     if (!running) {
       return;
@@ -118,7 +103,7 @@ export function createApp({ input, output, color = false, folder = "", draw = la
 // Runs the UI on this process's terminal until it's closed. The ui command
 // checks first that the input and output are a terminal.
 export async function runUi({ input = process.stdin, output = process.stdout, color = false, folder = basename(process.cwd()) } = {}) {
-  const app = createApp({ input, output, color, folder });
+  const app = createApp({ input, output, color, view: createDashboard({ folder }) });
   // While the UI runs, whatever else ends the process restores the terminal
   // first: an error nothing caught (then reported like any other error), a
   // signal, or the process exiting.

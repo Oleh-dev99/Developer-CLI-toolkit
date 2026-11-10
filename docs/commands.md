@@ -459,11 +459,15 @@ toolsmith ui [options]
 Example:
   $ toolsmith ui
 
-Press q or Ctrl+C to quit. The dashboard needs a terminal of at least 40x10,
-and says so in a smaller one until the window is made bigger. Its colors follow
---no-color, NO_COLOR and the "color" setting, like the other commands. For now
-it shows its layout only: the command menu, file browser and git status panel
-are still being built.
+In the dashboard, ? shows every shortcut. Arrow keys or h, j, k and l move,
+Tab and Shift+Tab switch panels, Enter opens, Esc goes back, / filters the list
+as you type, and q or Ctrl+C quits. With Node.js 22, the classic Windows
+console sends Shift+Tab as Tab; Left or h goes to the previous panel there.
+
+The dashboard needs a terminal of at least 40x10, and says so in a smaller one
+until the window is made bigger. Its colors follow --no-color, NO_COLOR and the
+"color" setting, like the other commands. For now its panels hold sample items:
+the command menu, file browser and git status panel are still being built.
 
 It needs a terminal for both its input and its output, so it doesn't run in
 scripts, in CI, or with its input or output redirected. Use the plain commands

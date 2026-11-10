@@ -83,11 +83,22 @@ toolsmith git template unset              # stop using it
 
 ### Dashboard
 
-`toolsmith ui` opens a full-screen dashboard in the terminal. It's at an early stage: for now it shows its layout only, and the command menu, file browser and git status panel are being built (see M7 in the [roadmap](ROADMAP.md)).
+`toolsmith ui` opens a full-screen dashboard in the terminal, with three panels: commands, files and git status. It's at an early stage: you can move around, filter and open items, but the panels hold sample items for now, while the command menu, file browser and git status panel are being built (see M7 in the [roadmap](ROADMAP.md)).
 
 ```sh
-toolsmith ui            # q or Ctrl+C quits
+toolsmith ui            # ? shows every shortcut, q quits
 ```
+
+| Keys | What they do |
+|---|---|
+| Up and Down, or `k` and `j`; PgUp, PgDn, Home, End | Move in the list |
+| Tab and Shift+Tab, Left and Right, or `h` and `l` | Switch panels |
+| Enter, Esc | Open the selected item, go back |
+| `/` | Filter the list as you type, in any case; Backspace edits, Enter keeps the filter, Esc clears it |
+| `?` | Show every shortcut; Esc or `?` closes the list |
+| `q` or Ctrl+C | Quit (while filtering, `q` is typed, and Ctrl+C quits) |
+
+The keys work the same in Windows Terminal, the classic Windows console, macOS Terminal and Linux terminals, whichever codes they send, with one exception: with Node.js 22, the classic Windows console sends Shift+Tab as a plain Tab, so use Left or `h` to go to the previous panel there.
 
 It needs a terminal of at least 40×10, and says so in a smaller one until the window is made bigger. Because it needs a terminal for both its input and its output, it refuses to start in scripts, in CI and with its input or output redirected; use the plain commands there. Its colors follow `--no-color`, `NO_COLOR` and the `"color"` setting, and it uses only the 16 basic colors, with inverse bars that stay readable without any. Whatever ends it, including Ctrl+C and errors, the terminal is put back as it was.
 

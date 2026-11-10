@@ -171,9 +171,9 @@ toolsmith is being built in twelve milestones. M1 is the foundation that every l
 
 ### Keyboard navigation
 
-- [ ] Arrow keys or `h`/`j`/`k`/`l` to move, `Tab` to switch panels, `Enter` to open, `Esc` to go back, `q` to quit
-- [ ] `/` filters the current list as you type
-- [ ] `?` shows all shortcuts in an overlay
+- [x] Arrow keys or `h`/`j`/`k`/`l` to move, `Tab` to switch panels, `Enter` to open, `Esc` to go back, `q` to quit
+- [x] `/` filters the current list as you type
+- [x] `?` shows all shortcuts in an overlay
 
 ### Command menu
 

@@ -36,6 +36,17 @@ export function truncate(text, columns) {
   return columns > 0 ? `${characters.slice(0, columns - 1).join("")}…` : "";
 }
 
+// `text` cut to at most `columns` columns from the start, beginning with "…"
+// when it was cut, so that its end stays in view: for what's being typed, or
+// a path.
+export function truncateStart(text, columns) {
+  const characters = [...text];
+  if (characters.length <= columns) {
+    return text;
+  }
+  return columns > 0 ? `…${characters.slice(characters.length - columns + 1).join("")}` : "";
+}
+
 // `text` made exactly `columns` wide: cut when longer, padded with spaces when
 // shorter.
 export function pad(text, columns) {
@@ -54,6 +65,18 @@ export function center(text, columns) {
 export function spread(left, right, columns) {
   const room = columns - width(right);
   return room > 0 ? pad(left, room) + right : pad(right, columns);
+}
+
+// `rows` inside a box drawn with lines, `columns` wide in all, so each row must
+// be `columns - 2` wide. `title` goes in the top line and `note` in the bottom
+// one.
+export function box(rows, columns, { title = "", note = "" } = {}) {
+  const inner = Math.max(0, columns - 2);
+  const line = (text) => {
+    const label = text ? truncate(` ${text} `, inner) : "";
+    return label + "─".repeat(Math.max(0, inner - width(label)));
+  };
+  return [`┌${line(title)}┐`, ...rows.map((row) => `│${row}│`), `└${line(note)}┘`];
 }
 
 // How wide the text of row `row` may be in a terminal of `size`. The last row

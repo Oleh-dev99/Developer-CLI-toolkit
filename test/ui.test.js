@@ -1,42 +1,20 @@
 import assert from "node:assert/strict";
-import { EventEmitter } from "node:events";
 import { readFileSync } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
-import { PassThrough } from "node:stream";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { createApp, layout, minimum } from "../src/tui/app.js";
-import { center, createScreen, pad, paints, rowWidth, spread, terminal, truncate, width } from "../src/tui/screen.js";
-import { runCli, screenTerminalEnv, terminalEnv, writeTempConfig } from "./helpers.js";
+import { createApp } from "../src/tui/app.js";
+import { createDashboard, minimum } from "../src/tui/dashboard.js";
+import { box, center, createScreen, pad, paints, rowWidth, spread, terminal, truncate, truncateStart, width } from "../src/tui/screen.js";
+import { fakeTerminal, pressKeys, runCli, screenTerminalEnv, terminalEnv, writeTempConfig } from "./helpers.js";
+
+// The terminal side of `toolsmith ui` (src/tui/app.js), the drawing helpers
+// (src/tui/screen.js), and the command itself. ui-navigation.test.js has the
+// keyboard navigation.
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 // The text without its control sequences.
 const plain = (text) => text.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, "");
-
-// A pretend terminal for createApp. `events` has, in order, everything that
-// was written and every change of raw mode.
-function fakeTerminal(columns = 60, rows = 15) {
-  const events = [];
-  const input = Object.assign(new PassThrough(), {
-    isTTY: true,
-    isRaw: false,
-    setRawMode(on) {
-      this.isRaw = on;
-      events.push(on ? "raw on" : "raw off");
-      return this;
-    },
-  });
-  const output = Object.assign(new EventEmitter(), {
-    isTTY: true,
-    columns,
-    rows,
-    write(text) {
-      events.push(text);
-      return true;
-    },
-  });
-  return { input, output, events };
-}
 
 // The terminal is back to normal, and the alternate screen was left (with the
 // cursor shown) before raw mode went off.
@@ -53,7 +31,7 @@ function assertRestored({ input, events }) {
 
 test("the UI starts on the alternate screen with the cursor hidden, and fills the terminal", async () => {
   const term = fakeTerminal(60, 15);
-  const app = createApp({ ...term, folder: "my-project" });
+  const app = createApp({ ...term, view: createDashboard({ folder: "my-project" }) });
   app.start();
   assert.ok(term.events[0].startsWith(terminal.enterAlternateScreen + terminal.hideCursor));
   assert.equal(term.input.isRaw, true);
@@ -62,7 +40,7 @@ test("the UI starts on the alternate screen with the cursor hidden, and fills th
   assert.equal(rows.length, 15);
   rows.forEach((row, index) => assert.equal(width(row), rowWidth(index, { columns: 60, rows: 15 }), `row ${index}`));
   assert.match(rows[0], /^ toolsmith ui +my-project $/);
-  assert.match(rows[14], /^ q or Ctrl\+C: quit/);
+  assert.match(rows[14], /^ \?: shortcuts {2}q: quit/);
   app.stop();
   await app.done;
 });
@@ -82,23 +60,32 @@ for (const [label, key] of [
 }
 
 test("a crash restores the terminal in the same order, and then reports the error", async () => {
-  // While drawing the first frame, and while redrawing after a resize.
-  for (const when of ["start", "resize"]) {
+  // While drawing the first frame, while redrawing after a resize, and while
+  // handling a key.
+  for (const when of ["start", "resize", "key"]) {
     const term = fakeTerminal();
+    const dashboard = createDashboard();
     let frames = 0;
-    const draw = (size, options) => {
-      frames++;
-      if (when === "start" || frames > 1) {
-        throw new Error(`broken at ${when}`);
-      }
-      return layout(size, options);
+    const view = {
+      render(size, paint) {
+        frames++;
+        if (when === "start" || (when === "resize" && frames > 1)) {
+          throw new Error(`broken at ${when}`);
+        }
+        return dashboard.render(size, paint);
+      },
+      key() {
+        throw new Error("broken at key");
+      },
     };
-    const app = createApp({ ...term, draw });
-    const done = app.start();
+    const app = createApp({ ...term, view });
+    const rejected = assert.rejects(app.start(), { message: `broken at ${when}` });
     if (when === "resize") {
       term.output.emit("resize");
+    } else if (when === "key") {
+      await pressKeys(term, "j");
     }
-    await assert.rejects(done, { message: `broken at ${when}` });
+    await rejected;
     assertRestored(term);
   }
 });
@@ -129,14 +116,15 @@ test("a resize clears the screen and redraws it at the new size", async () => {
 
 test(`below ${minimum.columns}x${minimum.rows} the UI says the terminal is too small, until it's bigger again`, async () => {
   const shows = (columns, rows) =>
-    layout({ columns, rows }, { paint: paints(false), folder: "x" })
+    createDashboard()
+      .render({ columns, rows }, paints(false))
       .map(plain)
       .join("\n");
   assert.match(shows(39, 30), /Terminal too small *\n *39x30, needs at least 40x10 *\n *q: quit/);
   assert.match(shows(100, 9), /Terminal too small/);
   assert.doesNotMatch(shows(40, 10), /too small/);
   // However small, every row still fits.
-  const tiny = layout({ columns: 5, rows: 2 }, { paint: paints(false), folder: "x" }).map(plain);
+  const tiny = createDashboard().render({ columns: 5, rows: 2 }, paints(false)).map(plain);
   assert.deepEqual(tiny.map(width), [5, 4]);
 
   const term = fakeTerminal(60, 15);
@@ -152,18 +140,31 @@ test(`below ${minimum.columns}x${minimum.rows} the UI says the terminal is too s
   await app.done;
 });
 
-test("the screen uses only the 16 basic colors, and none when colors are off, staying readable with inverse", () => {
-  // The SGR parameters in what's drawn, at a normal size and a too small one.
+test("every screen uses only the 16 basic colors, never magenta, and none when colors are off", () => {
+  // Each state the dashboard can be in, at a normal size and a too small one.
+  const states = [[], ["nextPanel"], ["startFilter"], ["open"], ["showHelp"]];
   const parameters = (color) =>
-    [{ columns: 60, rows: 15 }, { columns: 20, rows: 5 }].flatMap((size) =>
-      Array.from(layout(size, { paint: paints(color), folder: "x" }).join("").matchAll(/\x1b\[([0-9;]*)m/g), ([, list]) => list.split(";").map(Number)).flat(),
+    states.flatMap((actions) =>
+      [
+        { columns: 60, rows: 15 },
+        { columns: 20, rows: 5 },
+      ].flatMap((size) => {
+        const view = createDashboard({ folder: "x" });
+        for (const action of actions) {
+          view.actions[action]();
+        }
+        const text = view.render(size, paints(color)).join("");
+        return Array.from(text.matchAll(/\x1b\[([0-9;]*)m/g), ([, list]) => list.split(";").map(Number)).flat();
+      }),
     );
   const isColor = (n) => (n >= 30 && n <= 37) || n === 39 || (n >= 90 && n <= 97);
   const isStyle = (n) => [1, 7, 22, 27].includes(n);
+  const isMagenta = (n) => [35, 45, 95, 105].includes(n);
 
   const colored = parameters(true);
   assert.ok(colored.some(isColor));
   assert.deepEqual(colored.filter((n) => !isColor(n) && !isStyle(n)), [], "a code outside the 16 colors");
+  assert.deepEqual(colored.filter(isMagenta), [], "magenta");
   const uncolored = parameters(false);
   assert.deepEqual(uncolored.filter(isColor), []);
   assert.ok(uncolored.includes(7), "without colors, the bars should still be inverse");
@@ -173,6 +174,8 @@ test("screen helpers fit text into a number of columns", () => {
   assert.equal(truncate("toolsmith", 5), "tool…");
   assert.equal(truncate("tool", 5), "tool");
   assert.equal(truncate("tool", 0), "");
+  assert.equal(truncateStart("toolsmith", 5), "…mith");
+  assert.equal(truncateStart("tool", 5), "tool");
   assert.equal(pad("ab", 4), "ab  ");
   assert.equal(pad("abcdef", 4), "abc…");
   assert.equal(center("ab", 6), "  ab  ");
@@ -181,6 +184,8 @@ test("screen helpers fit text into a number of columns", () => {
   assert.equal(spread("left", "a wide right", 6), "a wid…");
   assert.equal(rowWidth(0, { columns: 10, rows: 3 }), 10);
   assert.equal(rowWidth(2, { columns: 10, rows: 3 }), 9);
+  assert.deepEqual(box(["abcde", "fghij"], 7, { title: "T", note: "a long note" }), ["┌ T ──┐", "│abcde│", "│fghij│", "└ a l…┘"]);
+  assert.deepEqual(box([], 6), ["┌────┐", "└────┘"]);
 });
 
 test("wide characters count as one column each, a known limit", () => {
@@ -252,11 +257,16 @@ test("toolsmith ui draws its screen, and q restores the terminal: the normal scr
     const { stdout, stderr, code } = await inTerminal(["ui"], {}, key);
     assert.equal(code, 0, stderr);
     assert.ok(stdout.startsWith(terminal.enterAlternateScreen + terminal.hideCursor));
-    assert.match(plain(stdout), / toolsmith ui .*Commands +coming soon/s);
-    const left = stdout.indexOf(terminal.showCursor + terminal.leaveAlternateScreen);
-    assert.ok(left > 0, "the alternate screen wasn't left");
+    assert.match(plain(stdout), / toolsmith ui .* Commands .*> new/s);
     assert.ok(stdout.endsWith(`${terminal.showCursor}${terminal.leaveAlternateScreen}<raw off>`), "raw mode went off at the wrong time");
   }
+});
+
+test("toolsmith ui answers keys typed in the terminal", async () => {
+  // Down twice, then quit: the frame before quitting has "dupes" selected.
+  const { stdout, code } = await inTerminal(["ui"], {}, "jjq");
+  assert.equal(code, 0);
+  assert.match(plain(stdout), /> dupes/);
 });
 
 test('toolsmith ui has colors only when they\'re on: NO_COLOR, --no-color and "color": false turn them off', async (t) => {
