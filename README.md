@@ -6,24 +6,14 @@ A command-line toolkit for developers, built with Node.js.
 
 ## Usage
 
-toolsmith isn't on npm yet. It will be published as `@oleh-dev99/toolsmith`, and the command will still be `toolsmith`. Until then, run it from a clone of this repository. Install the dependencies first:
+toolsmith needs Node.js 22.12 or later. The package has a scoped name, and the command is `toolsmith`:
 
 ```sh
-npm install
-```
-
-Then run it straight from the repository:
-
-```sh
-node bin/toolsmith.js --help
-```
-
-Or make the `toolsmith` command available globally from your local checkout:
-
-```sh
-npm link
+npm install --global @oleh-dev99/toolsmith
 toolsmith --help
 ```
+
+The [documentation site](https://oleh-dev99.github.io/Developer-CLI-toolkit/) has a getting-started guide, every setting, and the plugin author guide.
 
 ### Create a project from a template
 
@@ -119,7 +109,24 @@ To write a plugin, see the [plugin author guide](docs/PLUGINS.md), and start fro
 
 ## Development
 
+To work on toolsmith, clone this repository and install its dependencies. Run it with `node bin/toolsmith.js`, or run `npm link` once to make the `toolsmith` command use your checkout:
+
+```sh
+npm install
+node bin/toolsmith.js --help
+```
+
 `npm test` runs every test. The npm package holds only what toolsmith needs to run: `bin/`, `src/` and `templates/` (the `"files"` in `package.json`), with the README and the license. `npm pack --dry-run` lists it, and a test checks that the list is exactly that, so tests, docs and the example plugin never end up in the package.
+
+The documentation site is made from the Markdown pages in [docs/](docs) with [VitePress](https://vitepress.dev/). It has its own dependencies, so they don't add to toolsmith's install or slow down its tests. To see the site with your changes while you edit:
+
+```sh
+cd docs
+npm ci
+npm run dev
+```
+
+Every push to `main` publishes the site to GitHub Pages with the [docs workflow](.github/workflows/docs.yml).
 
 Changes are listed in the [changelog](CHANGELOG.md), and [docs/RELEASING.md](docs/RELEASING.md) explains how a version is released.
 

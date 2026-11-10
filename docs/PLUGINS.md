@@ -2,7 +2,7 @@
 
 A plugin adds commands to toolsmith. It's an ordinary npm package with a name that starts with `toolsmith-plugin-`, and toolsmith finds it where npm installs it. This guide covers everything a plugin can do and how toolsmith treats it.
 
-The quickest start is the example plugin in [`examples/toolsmith-plugin-example`](../examples/toolsmith-plugin-example): a small but complete plugin with two commands and its own tests. Copy it, and change what you need.
+The quickest start is the example plugin in [`examples/toolsmith-plugin-example`](https://github.com/Oleh-dev99/Developer-CLI-toolkit/tree/main/examples/toolsmith-plugin-example): a small but complete plugin with two commands and its own tests. Copy it, and change what you need.
 
 ## A plugin in short
 
@@ -57,7 +57,7 @@ toolsmith calls `register(api)` once per run, before it runs the command, and wa
 | `api.output` | toolsmith's `success` and `info` (to stdout), and `warn` and `error` (to stderr, as `warning: ...` and `error: ...`). They follow toolsmith's color settings: `--no-color`, `NO_COLOR` and `"color": false`. Print plain results, like a list, with `console.log`. |
 | `api.version` | toolsmith's version, like `"0.1.0"`. |
 
-The settings are `color`, `greeting`, `protectedBranches`, `templates` and `plugins`; see the main [README](../README.md). A plugin can't have settings of its own in `~/.toolsmithrc` yet: toolsmith warns about any setting it doesn't know. Use options or environment variables for now.
+The settings are `color`, `greeting`, `protectedBranches`, `templates` and `plugins`; see [Configuration](configuration.md). A plugin can't have settings of its own in `~/.toolsmithrc` yet: toolsmith warns about any setting it doesn't know. Use options or environment variables for now.
 
 To report a problem from a command, throw an `Error`. toolsmith prints `error: <message>`, sets exit code 1, and shows the stack trace only with `--debug`. Don't call `process.exit()`.
 
@@ -185,8 +185,6 @@ toolsmith hi Ada
 npm links the folder instead of copying it, so your changes show up in toolsmith right away, without installing again. `npm install --global ../toolsmith-plugin-hello-world` does the same for every project. If something's wrong, toolsmith's warnings and `toolsmith plugins` (or `toolsmith plugins --json`) say what: a skipped command, an incompatible version range, or the error your plugin threw while loading.
 
 ## Publishing
-
-> **toolsmith isn't on npm yet.** It will be published as `@oleh-dev99/toolsmith`, and the command will still be `toolsmith`. Until then, `npm install` fails with a 404 for a packaged plugin whose peer dependency is required, which is one more reason to keep it optional, as shown.
 
 Publish a plugin like any npm package (`npm publish`). Before you do:
 

@@ -24,6 +24,7 @@ build/
 .npm/
 .eslintcache
 *.tsbuildinfo
+docs/.vitepress/cache/
 
 # Output of `npm pack`
 *.tgz
