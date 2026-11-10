@@ -17,6 +17,13 @@ function paint(format, text, stream) {
   return colorEnabled ? styleText(format, text, { stream }) : text;
 }
 
+// Whether text written to `stream` may have colors: not after --no-color or
+// "color": false, and only on a terminal that has colors. Node's hasColors()
+// checks NO_COLOR, FORCE_COLOR and TERM, as styleText does for the messages.
+export function colorsFor(stream) {
+  return colorEnabled && stream.hasColors?.() === true;
+}
+
 export function success(message) {
   console.log(paint("green", message, process.stdout));
 }

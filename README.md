@@ -81,6 +81,18 @@ toolsmith git template unset              # stop using it
 }
 ```
 
+### Dashboard
+
+`toolsmith ui` opens a full-screen dashboard in the terminal. It's at an early stage: for now it shows its layout only, and the command menu, file browser and git status panel are being built (see M7 in the [roadmap](ROADMAP.md)).
+
+```sh
+toolsmith ui            # q or Ctrl+C quits
+```
+
+It needs a terminal of at least 40×10, and says so in a smaller one until the window is made bigger. Because it needs a terminal for both its input and its output, it refuses to start in scripts, in CI and with its input or output redirected; use the plain commands there. Its colors follow `--no-color`, `NO_COLOR` and the `"color"` setting, and it uses only the 16 basic colors, with inverse bars that stay readable without any. Whatever ends it, including Ctrl+C and errors, the terminal is put back as it was.
+
+Known limit: wide characters, like Chinese, Japanese and Korean ones and most emoji, count as one column, so rows that have them don't line up yet.
+
 ## Plugins
 
 Plugins add commands to toolsmith. A plugin is an npm package named `toolsmith-plugin-<something>` or `@scope/toolsmith-plugin-<something>`, and toolsmith finds it where npm installs it, in the current project (`node_modules` here or in a folder above) or globally:

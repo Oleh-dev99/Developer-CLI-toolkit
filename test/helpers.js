@@ -34,6 +34,12 @@ export const terminalEnv = {
   NODE_OPTIONS: `--import "${new URL("fixtures/terminal-stdin.mjs", import.meta.url).href}"`,
 };
 
+// For runCli: makes the CLI believe that both its input and its output are a
+// 60x15 terminal, for running `toolsmith ui` (see fixtures/terminal.mjs).
+export const screenTerminalEnv = {
+  NODE_OPTIONS: `--import "${new URL("fixtures/terminal.mjs", import.meta.url).href}"`,
+};
+
 // Streams for createPrompt: `answers` are typed in all at once, then the input
 // ends; written() returns everything the prompt wrote.
 export function promptStreams(answers) {

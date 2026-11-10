@@ -9,6 +9,7 @@ import * as newCommand from "./commands/new.js";
 import * as pluginsCommand from "./commands/plugins.js";
 import * as renameCommand from "./commands/rename.js";
 import * as sizeCommand from "./commands/size.js";
+import * as uiCommand from "./commands/ui.js";
 import { loadConfig } from "./config.js";
 import { disableColor, error, warn } from "./output.js";
 import { loadPlugins } from "./plugins.js";
@@ -25,6 +26,7 @@ const commands = [
   pluginsCommand,
   renameCommand,
   sizeCommand,
+  uiCommand,
 ];
 
 export async function run(argv) {

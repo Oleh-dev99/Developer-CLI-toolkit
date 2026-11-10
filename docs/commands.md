@@ -28,6 +28,7 @@ toolsmith [options] [command]
 | [`plugins [options]`](#toolsmith-plugins) | list the installed plugins, or turn one on or off |
 | [`rename [options] <find> <replace> [paths...]`](#toolsmith-rename) | find and replace text in file names |
 | [`size [options] [path]`](#toolsmith-size) | show the biggest folders and files under a folder |
+| [`ui`](#toolsmith-ui) | open a full-screen dashboard in the terminal |
 
 ## toolsmith config
 
@@ -444,4 +445,27 @@ Examples:
 Folder sizes include everything inside them, and percentages are shares of the
 total. Hard-linked files count once. .git and node_modules are skipped unless
 you add --all. Sizes use 1 KB = 1024 bytes.
+```
+
+## toolsmith ui
+
+Open a full-screen dashboard in the terminal.
+
+```text
+toolsmith ui [options]
+```
+
+```text
+Example:
+  $ toolsmith ui
+
+Press q or Ctrl+C to quit. The dashboard needs a terminal of at least 40x10,
+and says so in a smaller one until the window is made bigger. Its colors follow
+--no-color, NO_COLOR and the "color" setting, like the other commands. For now
+it shows its layout only: the command menu, file browser and git status panel
+are still being built.
+
+It needs a terminal for both its input and its output, so it doesn't run in
+scripts, in CI, or with its input or output redirected. Use the plain commands
+there, like toolsmith size or toolsmith git recent.
 ```
