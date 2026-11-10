@@ -82,8 +82,9 @@ export function createDashboard({
   const panel = () => panels()[Math.min(state.focus, panels().length - 1)];
   const help = createList(helpLines(), { selectable: false, label: (line) => line.text, style: (line) => (line.bold ? "bold" : undefined) });
 
-  // The Files panel's sizes and the git status keep up with changes made
-  // outside, in bursts; nothing is watched once the UI ends. In a repository,
+  // The Files panel (its open folders' entries, and the sizes) and the git
+  // status keep up with changes made outside, in bursts; nothing is watched
+  // once the UI ends. In a repository,
   // the watch is on its top folder, which has the whole working tree and .git
   // in it, even when the Files panel shows a folder further down.
   gitStatus.refresh();
@@ -94,6 +95,7 @@ export function createDashboard({
         filesIn: filesIn ? `${filesIn}/` : "",
         onChange: ({ files, git: gitChanged }) => {
           if (files) {
+            tree.reload();
             tree.remeasure();
           }
           if (gitChanged) {

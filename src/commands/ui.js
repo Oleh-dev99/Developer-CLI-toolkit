@@ -26,9 +26,10 @@ In a git repository, the Git status panel shows the branch, how far it is ahead
 of and behind its upstream, and the staged, unstaged, conflicted and untracked
 files; Enter on a file shows it. c shows recent commits (git recent), and b
 cleans up merged branches: a --dry-run preview first, then Enter goes on to the
-form, where --yes must be ticked. The folder is watched, so the git status and
-the folder sizes keep up with changes made elsewhere; F5 or R reads the status
-again. Outside a repository, or without git, the other panels share its space.
+form, where --yes must be ticked. The folder is watched, so the Files panel
+(the open folders' entries and the sizes) and the git status keep up with
+changes made elsewhere; F5 or R reads the status again. Outside a repository,
+or without git, the other panels share its space.
 
 In the dashboard, ? shows every shortcut. Arrow keys or h, j, k and l move,
 Tab and Shift+Tab switch panels, Enter opens, Esc goes back, / filters the list

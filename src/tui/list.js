@@ -48,15 +48,34 @@ export function createList(items = [], { label = String, empty = "Nothing here",
       top = 0;
     },
 
-    // Replaces the items, keeping the filter, and the selection: on the same
-    // item when it's still there, or else in the same place.
+    // Replaces the items, keeping the filter, the selection (on the same item
+    // when it's still there, or else in the same place), and the scroll
+    // position: the item at the top of the view stays there when it's still
+    // there, so that rows added or dropped above don't move the rows in view.
     setItems(newItems) {
-      items = newItems;
       const before = shown[selected];
+      const firstInView = shown[top];
+      items = newItems;
       const wanted = filter.toLowerCase();
       shown = wanted ? items.filter((item) => label(item).toLowerCase().includes(wanted)) : items;
-      const same = before === undefined ? -1 : shown.findIndex((item) => key(item) === key(before));
+      // The same item's index now, nearest to `near` (keys can repeat), or -1.
+      const find = (item, near) => {
+        let found = -1;
+        if (item !== undefined) {
+          shown.forEach((candidate, index) => {
+            if (key(candidate) === key(item) && (found < 0 || Math.abs(index - near) < Math.abs(found - near))) {
+              found = index;
+            }
+          });
+        }
+        return found;
+      };
+      const same = find(before, selected);
       selected = same >= 0 ? same : Math.max(0, Math.min(selected, shown.length - 1));
+      const anchor = find(firstInView, top);
+      if (anchor >= 0) {
+        top = anchor;
+      }
     },
 
     // Whether the end of the list is in view, as of the last render(): for

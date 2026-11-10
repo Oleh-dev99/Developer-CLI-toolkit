@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { EventEmitter } from "node:events";
-import { chmodSync, existsSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { monitorEventLoopDelay } from "node:perf_hooks";
 import { test } from "node:test";
@@ -14,6 +14,7 @@ import { createDashboard } from "../src/tui/dashboard.js";
 import { editorCommand, openerFor, openWithApp } from "../src/tui/open.js";
 import { previewLimit, readPreview } from "../src/tui/preview.js";
 import { plainLine, terminal, width } from "../src/tui/screen.js";
+import { createTree } from "../src/tui/tree.js";
 import { fakeTerminal, makeTree, pressKeys, tempDir } from "./helpers.js";
 
 // The Files panel of `toolsmith ui`: the folder tree (src/tui/tree.js), file
@@ -93,10 +94,10 @@ async function session(t, { files = project, columns = 80, rows = 20, ...options
 
 test("the Files panel shows the folder's tree with sizes, without .git and node_modules", async (t) => {
   const ui = await session(t);
-  await ui.until(/\+ docs\/ +159 B/, "the folder sizes");
+  // src's size comes a moment after docs'.
+  await ui.until(/\+ docs\/ +159 B[\s\S]*\+ src\/ +1000 B/, "the folder sizes");
   const screen = ui.screen();
   assert.match(screen, /README\.md +10 B/);
-  assert.match(screen, /\+ src\/ +1000 B/);
   assert.match(screen, /日本語\.txt +16 B/);
   assert.doesNotMatch(screen, /\.git|node_modules/);
   assert.equal(ui.view.tree.totalSize(), 10 + 159 + 1000 + 16);
@@ -150,6 +151,140 @@ test("folder sizes come in the background, with … until they're known, and key
   assert.match(early, /\+ folder\d\d\/ +…/, "a folder without its size yet shows …");
   assert.match(ui.screen(), /\+ folder00\/ +4\.8 KB/);
   // Nothing held up the event loop, and so the keys, for long.
+  assert.ok(delay.max < 250e6, `the event loop was held up for ${Math.round(delay.max / 1e6)} ms`);
+});
+
+// The Files panel's rows as text: the selection marker, then each entry with
+// " | " between its name and its size.
+const treeRows = (tree) =>
+  tree.list
+    .render(40, 20)
+    .map((row) => row.trimEnd())
+    .filter(Boolean)
+    .map((row) => row.slice(0, 2) + row.slice(2).replace(/(\S) {2,}(?=\S)/, "$1 | "));
+// The Files panel's column of the screen, at 80 columns: its header and rows.
+const filesColumn = (ui) =>
+  ui.app
+    .rows()
+    .slice(1, -1)
+    .map((row) => plain(row).split("│")[1].trimEnd());
+
+test("reload() reads the open folders again: new, deleted and renamed entries, with open folders and the selection kept", async (t) => {
+  const root = makeTree(t, project);
+  const tree = createTree(root);
+  t.after(() => tree.stop());
+  await until(() => tree.list.count() === 4 && tree.totalSize() !== undefined, "the tree");
+  const top = tree.list.selected().parent;
+  const child = (folder, name) => folder.children.find((node) => node.name === name);
+  const open = async (folder) => {
+    tree.toggle(folder);
+    await until(() => folder.children !== null && !folder.loading, folder.name);
+  };
+  const docs = child(top, "docs");
+  await open(docs);
+  const deep = child(docs, "deep");
+  await open(deep);
+  // src is read, then closed again.
+  const src = child(top, "src");
+  await open(src);
+  tree.toggle(src);
+  const guide = child(docs, "guide.md");
+  tree.select(guide);
+
+  writeFileSync(join(root, "docs", "added.md"), "new");
+  rmSync(join(root, "README.md"));
+  renameSync(join(root, "docs", "guide.md"), join(root, "docs", "manual.md"));
+  writeFileSync(join(root, "docs", "deep", "notes.txt"), "n".repeat(60));
+  writeFileSync(join(root, "src", "new.js"), "x");
+  await Promise.all([tree.reload(), tree.remeasure()]);
+  assert.deepEqual(treeRows(tree), [
+    "  - docs/ | 172 B",
+    "      a.txt | 4 B",
+    "      added.md | 3 B",
+    "      b.txt | 4 B",
+    "    - deep/ | 60 B",
+    "        notes.txt | 60 B",
+    "      draft-one.md | 1 B",
+    ">     manual.md | 100 B",
+    "  + src/ | 1001 B",
+    "    日本語.txt | 16 B",
+  ]);
+  // The renamed file is the same entry as before, so it stays selected.
+  assert.equal(tree.list.selected(), guide);
+  // src was closed, so it's read again only when it's opened.
+  assert.equal(child(src, "new.js"), undefined);
+  tree.toggle(src);
+  await until(() => child(src, "new.js"), "src/new.js");
+  assert.equal(tree.list.selected(), guide);
+});
+
+test("the Files list follows files created, deleted and renamed while the dashboard runs, at 80x20", async (t) => {
+  const ui = await session(t);
+  await ui.select("docs");
+  await ui.press(key.right);
+  await ui.until(/guide\.md/, "docs to open");
+  await ui.select("guide.md");
+  // No keys from here on: the watcher sees the changes.
+  writeFileSync(join(ui.cwd, "docs", "added.md"), "new");
+  await ui.until(/added\.md +3 B/, "the new file");
+  rmSync(join(ui.cwd, "README.md"));
+  await until(() => !ui.screen().includes("README.md"), "README.md to go");
+  renameSync(join(ui.cwd, "docs", "guide.md"), join(ui.cwd, "docs", "manual.md"));
+  await ui.until(/manual\.md/, "the new name");
+  await ui.until(/- docs\/ +162 B/, "the new size");
+  assert.equal(ui.view.context(), "files");
+  assert.equal(ui.view.tree.list.selected().name, "manual.md");
+  assert.deepEqual(filesColumn(ui), [
+    " Files                              7/9",
+    "  - docs/                          162 B",
+    "      a.txt                          4 B",
+    "      added.md                       3 B",
+    "      b.txt                          4 B",
+    "    + deep/                         50 B",
+    "      draft-one.md                   1 B",
+    ">     manual.md                    100 B",
+    "  + src/                          1000 B",
+    "    日本語.txt                      16 B",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+  ]);
+});
+
+test("changes outside keep the Files list's rows in view where they were", async (t) => {
+  const files = Object.fromEntries(Array.from({ length: 40 }, (_, index) => [`file${String(index + 1).padStart(2, "0")}.txt`, "x"]));
+  const ui = await session(t, { files, rows: 12 });
+  await ui.select("file20.txt");
+  const before = filesColumn(ui);
+  assert.match(before[0], / 20\/40$/);
+  assert.match(before[1], /^ {4}file12\.txt/);
+  assert.match(before[9], /^> {3}file20\.txt/);
+  // Files dropped and added above the rows in view, and added below them.
+  rmSync(join(ui.cwd, "file01.txt"));
+  rmSync(join(ui.cwd, "file05.txt"));
+  writeFileSync(join(ui.cwd, "file00.txt"), "x");
+  writeFileSync(join(ui.cwd, "file99.txt"), "x");
+  await until(() => filesColumn(ui)[0].endsWith(" 19/40"), "the new list");
+  assert.deepEqual(filesColumn(ui).slice(1), before.slice(1));
+});
+
+test("reading a big open folder again doesn't hold up the keys", async (t) => {
+  const files = Object.fromEntries(Array.from({ length: 2000 }, (_, index) => [`big/file${String(index).padStart(4, "0")}.txt`, "x"]));
+  const ui = await session(t, { files });
+  await ui.press(key.right);
+  await until(() => ui.view.tree.list.count() === 2001, "big/ to open");
+  const delay = monitorEventLoopDelay({ resolution: 10 });
+  delay.enable();
+  writeFileSync(join(ui.cwd, "big", "zzz.txt"), "x");
+  await ui.press(key.down, key.down);
+  assert.equal(ui.view.tree.list.selected().name, "file0001.txt");
+  await until(() => ui.view.tree.list.count() === 2002, "the new file");
+  delay.disable();
   assert.ok(delay.max < 250e6, `the event loop was held up for ${Math.round(delay.max / 1e6)} ms`);
 });
 

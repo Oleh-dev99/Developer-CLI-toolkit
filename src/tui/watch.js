@@ -1,7 +1,7 @@
 import { watch } from "node:fs";
 
-// Watching the folder tree for toolsmith ui, so that the Files panel's sizes
-// and the Git status panel keep up with changes made outside it.
+// Watching the folder tree for toolsmith ui, so that the Files panel and the
+// Git status panel keep up with changes made outside it.
 
 // Watches everything under `root` with one recursive fs.watch, and calls
 // `onChange({ files, git })` once for each burst of changes: `files` when

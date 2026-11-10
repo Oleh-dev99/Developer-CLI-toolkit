@@ -11,7 +11,8 @@ import { printable, spread, width } from "./screen.js";
 // Nothing here waits for the file system in a way that holds up key presses:
 // a folder's entries are read when it's opened, and appear as they come; the
 // folders' sizes are worked out in the background, in one pass over the whole
-// tree, and each folder shows "…" until its own is known.
+// tree, and each folder shows "…" until its own is known. When files change,
+// reload() reads the open folders again, in the background too.
 
 // `onChange` is called when there's something new to show; `onWarning` with a
 // message for each entry that couldn't be read.
@@ -67,6 +68,20 @@ export function createTree(root, { onChange = () => {}, onWarning = () => {}, ig
     onChange();
   }
 
+  // The node for `entry`, from reading `folder`. Files have a `fileId`.
+  const nodeFor = (folder, entry) => ({
+    name: entry.relativePath,
+    relativePath: folder.relativePath ? `${folder.relativePath}/${entry.relativePath}` : entry.relativePath,
+    path: entry.path,
+    type: entry.type,
+    size: entry.size,
+    fileId: entry.fileId,
+    depth: folder.depth + 1,
+    open: false,
+    children: null,
+    parent: folder,
+  });
+
   // Reads one folder's entries, adding them as they come.
   async function load(folder) {
     folder.children = [];
@@ -78,17 +93,7 @@ export function createTree(root, { onChange = () => {}, onWarning = () => {}, ig
         if (stopped) {
           return;
         }
-        folder.children.push({
-          name: entry.relativePath,
-          relativePath: folder.relativePath ? `${folder.relativePath}/${entry.relativePath}` : entry.relativePath,
-          path: entry.path,
-          type: entry.type,
-          size: entry.size,
-          depth: folder.depth + 1,
-          open: false,
-          children: null,
-          parent: folder,
-        });
+        folder.children.push(nodeFor(folder, entry));
         // Show what's there so far, now and then, in a big folder.
         if (++count % 200 === 0) {
           refresh();
@@ -101,6 +106,119 @@ export function createTree(root, { onChange = () => {}, onWarning = () => {}, ig
       folder.loading = false;
       refresh();
     }
+  }
+
+  // Reads a folder that was read before again, and merges what's there now
+  // into its entries: an entry that's still there keeps its node, so an open
+  // folder stays open, with its own entries; a renamed file keeps its node too
+  // (found by its file ID; a renamed folder comes back closed); new entries are
+  // added, and those that are gone are dropped. When a folder is read twice at
+  // once, only the later read counts. Returns whether anything changed.
+  // Entries that can't be read were reported when the folder was first read,
+  // so they aren't reported again on every change. An entry that's gone by
+  // the time it's looked at means the folder changed while it was read, as
+  // when a file is renamed then, so it's read again (a few times at most):
+  // otherwise the renamed file would be missing from this read, and lose its
+  // node.
+  async function reread(folder) {
+    const read = {};
+    folder.reading = read;
+    let entries;
+    for (let attempt = 1; ; attempt++) {
+      let vanished = false;
+      entries = [];
+      try {
+        const onWarning = (message, err) => {
+          vanished ||= err?.code === "ENOENT";
+        };
+        for await (const entry of walk(folder.path, { recursive: false, ignore, onWarning })) {
+          entries.push(entry);
+        }
+      } catch {
+        // It's gone, so the folder it was in drops it, or it can't be read
+        // just now; either way, what it showed stays until it's read again.
+        return false;
+      }
+      if (!vanished || attempt === 3 || stopped || folder.reading !== read) {
+        break;
+      }
+    }
+    if (stopped || folder.reading !== read) {
+      return false;
+    }
+    const before = folder.children;
+    const byName = new Map(before.map((node) => [node.name, node]));
+    const sameName = entries.map((entry) => (byName.get(entry.relativePath)?.type === entry.type ? byName.get(entry.relativePath) : undefined));
+    const kept = new Set(sameName.filter(Boolean));
+    const renamed = new Map(before.filter((node) => !kept.has(node) && node.fileId).map((node) => [node.fileId, node]));
+    let changed = entries.length !== before.length;
+    folder.children = entries.map((entry, index) => {
+      let node = sameName[index];
+      if (!node && renamed.get(entry.fileId)?.type === entry.type) {
+        node = renamed.get(entry.fileId);
+        renamed.delete(entry.fileId);
+      }
+      if (!node) {
+        changed = true;
+        return nodeFor(folder, entry);
+      }
+      changed ||= node !== before[index] || node.name !== entry.relativePath || node.size !== entry.size;
+      return Object.assign(node, nodeFor(folder, entry), { open: node.open, children: node.children });
+    });
+    return changed;
+  }
+
+  // Reads again every folder that's shown under `from`: `from`, and each open
+  // folder in it whose folders are all open, one at a time, showing each one's
+  // changes as soon as it's read. Folders read before that aren't shown now
+  // are only marked, and read again when they're opened.
+  async function reloadFrom(from) {
+    const shown = [];
+    const visit = (folder, isShown) => {
+      if (folder.children === null || folder.loading) {
+        return;
+      }
+      if (isShown) {
+        shown.push(folder);
+      } else {
+        folder.stale = true;
+      }
+      for (const child of folder.children) {
+        if (child.type === "directory") {
+          visit(child, isShown && child.open);
+        }
+      }
+    };
+    visit(from, true);
+    for (const folder of shown) {
+      if (stopped) {
+        return;
+      }
+      folder.stale = false;
+      if (await reread(folder)) {
+        refresh();
+      }
+    }
+  }
+
+  // Only one reload runs at a time; one asked for meanwhile runs once more,
+  // right after it.
+  let reloading = null;
+  let again = false;
+  function reload() {
+    if (reloading) {
+      again = true;
+      return reloading;
+    }
+    reloading = (async () => {
+      do {
+        again = false;
+        await reloadFrom(top);
+      } while (again && !stopped);
+    })().finally(() => {
+      reloading = null;
+    });
+    return reloading;
   }
 
   // Adds up every folder's size in one walk, as the size command does: files
@@ -154,7 +272,8 @@ export function createTree(root, { onChange = () => {}, onWarning = () => {}, ig
     root,
     // The total size of everything shown, once it's known.
     totalSize: () => sizes.get(""),
-    // Opens a closed folder (reading it the first time), closes an open one.
+    // Opens a closed folder (reading it the first time, or again when files
+    // changed while it was closed), closes an open one.
     toggle(node) {
       if (node?.type !== "directory") {
         return;
@@ -162,8 +281,11 @@ export function createTree(root, { onChange = () => {}, onWarning = () => {}, ig
       node.open = !node.open;
       if (node.open && node.children === null) {
         load(node);
-      } else {
-        refresh();
+        return;
+      }
+      refresh();
+      if (node.open && node.stale) {
+        reloadFrom(node);
       }
     },
     // The folder an entry is in, or undefined at the top.
@@ -176,6 +298,9 @@ export function createTree(root, { onChange = () => {}, onWarning = () => {}, ig
         list.move(1);
       }
     },
+    // After files changed: reads the open folders again, keeping which are
+    // open, the selection and the scroll position; resolves when it's done.
+    reload,
     // Adds up the folders' sizes again, after files changed.
     remeasure: () => measure(),
     // Reads a file's size again, after it was edited.

@@ -455,6 +455,25 @@ test("a list's new items keep the selection on the same item, or else in the sam
   assert.equal(list.selected().id, "a");
   list.setItems([]);
   assert.equal(list.selected(), undefined);
+  // Keys can repeat, like blank rows: the one nearest to where it was counts.
+  const blanks = createList(["", "x", "", "y", ""]);
+  blanks.move(2);
+  blanks.setItems(["", "new", "x", "", "y", ""]);
+  assert.equal(blanks.position(), "4/6");
+});
+
+test("a list's new items keep the rows in view where they were", () => {
+  const ids = (from, to) => Array.from({ length: to - from + 1 }, (_, index) => `item${String(from + index).padStart(2, "0")}`);
+  const list = createList(ids(1, 20));
+  list.move(9);
+  const view = () => list.render(8, 4).map((row) => row.trim());
+  assert.deepEqual(view(), ["item07", "item08", "item09", "> item10"]);
+  // Rows dropped and added above the view, and added below it.
+  list.setItems([...ids(3, 5), "itemA", ...ids(6, 20), "itemZ"]);
+  assert.deepEqual(view(), ["item07", "item08", "item09", "> item10"]);
+  // When the row at the top is gone, the view still keeps the selection in it.
+  list.setItems(ids(8, 20));
+  assert.deepEqual(view(), ["> item10", "item11", "item12", "item13"]);
 });
 
 test("a list that only scrolls has no selection, and moving scrolls it", () => {
