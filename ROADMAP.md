@@ -183,9 +183,9 @@ toolsmith is being built in twelve milestones. M1 is the foundation that every l
 
 ### File browser
 
-- [ ] Folder tree with sizes, using the M2 directory walker and its ignore patterns
-- [ ] Preview text files, or open a file in your editor or its default app
-- [ ] Run the M2 file tools on the selected folder (size report, duplicates, rename preview)
+- [x] Folder tree with sizes, using the M2 directory walker and its ignore patterns
+- [x] Preview text files, or open a file in your editor or its default app
+- [x] Run the M2 file tools on the selected folder (size report, duplicates, rename preview)
 
 ### Git status panel
 

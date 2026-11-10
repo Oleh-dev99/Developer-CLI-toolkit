@@ -16,6 +16,12 @@ and runs it, with its output in a panel that scrolls; Esc or Ctrl+C cancels a
 command that's still running. A command that can ask questions only runs with
 --yes ticked; otherwise run it in a terminal of its own.
 
+The Files panel shows the current folder as a tree, without .git and
+node_modules, with sizes. Right or Enter opens a folder and Left closes it;
+Enter on a file shows it. e edits a file in $VISUAL or $EDITOR, o opens a file
+or folder in its default app, and s, d and r run size, dupes and a rename
+preview (--dry-run) on the selected folder.
+
 In the dashboard, ? shows every shortcut. Arrow keys or h, j, k and l move,
 Tab and Shift+Tab switch panels, Enter opens, Esc goes back, / filters the list
 as you type, and q or Ctrl+C quits. With Node.js 22, the classic Windows
@@ -23,9 +29,8 @@ console sends Shift+Tab as Tab; Left or h goes to the previous panel there.
 
 The dashboard needs a terminal of at least 40x10, and says so in a smaller one
 until the window is made bigger. Its colors follow --no-color, NO_COLOR and the
-"color" setting, like the other commands. For now the Files and Git status
-panels hold sample items: the file browser and git status panel are still
-being built.
+"color" setting, like the other commands. The Git status panel is still being
+built.
 
 It needs a terminal for both its input and its output, so it doesn't run in
 scripts, in CI, or with its input or output redirected. Use the plain commands

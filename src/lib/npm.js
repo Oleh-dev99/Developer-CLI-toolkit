@@ -1,7 +1,6 @@
 import { spawn } from "node:child_process";
 import { once } from "node:events";
-import { accessSync, constants, statSync } from "node:fs";
-import { delimiter, isAbsolute, join } from "node:path";
+import { findProgram } from "./program.js";
 
 // Runs npm with `args` in `cwd`. npm's output is shown as it comes, and a
 // failure throws. Like git, npm is started without a shell, except that
@@ -28,34 +27,5 @@ export async function npm(args, { cwd = process.cwd() } = {}) {
   const [code, signal] = await once(child, "close");
   if (code !== 0) {
     throw new Error(`npm ${args.join(" ")} failed (${signal ?? `exit code ${code}`})`);
-  }
-}
-
-// Where the program `name` is on the PATH, or undefined. On Windows it tries
-// the extensions Windows can start (npm is npm.cmd there), like cmd.exe, but
-// unlike cmd.exe it never looks in the current folder.
-function findProgram(name) {
-  const extensions = process.platform === "win32" ? [".com", ".exe", ".bat", ".cmd"] : [""];
-  for (const entry of (process.env.PATH ?? "").split(delimiter)) {
-    const folder = entry.replace(/^"(.*)"$/, "$1"); // Windows allows quotes here.
-    if (!isAbsolute(folder)) {
-      continue;
-    }
-    for (const extension of extensions) {
-      const path = join(folder, name + extension);
-      if (isProgram(path)) {
-        return path;
-      }
-    }
-  }
-  return undefined;
-}
-
-function isProgram(path) {
-  try {
-    accessSync(path, constants.X_OK); // On Windows, only that it exists.
-    return statSync(path).isFile();
-  } catch {
-    return false;
   }
 }

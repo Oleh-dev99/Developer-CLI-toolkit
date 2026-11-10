@@ -1,9 +1,9 @@
 import { spawn } from "node:child_process";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { stripVTControlCharacters } from "node:util";
 import { formatDuration } from "../lib/format.js";
 import { createList } from "./list.js";
+import { plainLine } from "./screen.js";
 
 // Runs a toolsmith command for the dashboard, as a child process of toolsmith
 // itself (no shell), and keeps its output in a list that scrolls.
@@ -52,7 +52,7 @@ export function runCommand(args, { cwd = process.cwd(), env = process.env, onCha
       const parts = (partial[stream] + chunk).split(/\r?\n/);
       partial[stream] = parts.pop();
       for (const part of parts) {
-        add(clean(part), stream === "stderr");
+        add(plainLine(part), stream === "stderr");
       }
       onChange();
     });
@@ -68,7 +68,7 @@ export function runCommand(args, { cwd = process.cwd(), env = process.env, onCha
     }
     for (const stream of ["stdout", "stderr"]) {
       if (partial[stream]) {
-        add(clean(partial[stream]), stream === "stderr");
+        add(plainLine(partial[stream]), stream === "stderr");
         partial[stream] = "";
       }
     }
@@ -140,20 +140,4 @@ export function killTree(child) {
   };
   signalGroup("SIGTERM");
   setTimeout(() => signalGroup("SIGKILL"), 2000).unref();
-}
-
-// An output line as plain text: what's left after the last carriage return
-// (progress that rewrites its line), without escape codes or other control
-// characters, and with tabs turned into spaces.
-function clean(line) {
-  const text = stripVTControlCharacters(line.split("\r").findLast((part) => part !== "") ?? "");
-  let result = "";
-  for (const character of text) {
-    if (character === "\t") {
-      result += " ".repeat(8 - ([...result].length % 8));
-    } else if (character >= " " && character !== "\x7f") {
-      result += character;
-    }
-  }
-  return result;
 }

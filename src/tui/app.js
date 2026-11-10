@@ -39,7 +39,13 @@ export function createApp({ input, output, color = false, view = createDashboard
         stop(err);
       }
     };
-  const render = guarded(() => screen.draw(view.render(size(), paint)));
+  // While another program has the terminal (see suspend()), nothing is drawn.
+  let suspended = false;
+  const render = guarded(() => {
+    if (!suspended) {
+      screen.draw(view.render(size(), paint));
+    }
+  });
   // For things that change on their own, like a command's output: draws at
   // most about 60 times a second, however fast the output comes.
   let pending = null;
@@ -52,8 +58,10 @@ export function createApp({ input, output, color = false, view = createDashboard
     }, 16);
   };
   const onResize = guarded(() => {
-    screen.clear();
-    render();
+    if (!suspended) {
+      screen.clear();
+      render();
+    }
   });
   const onKey = guarded((text, key = {}) => {
     if (view.key(text, key) === "quit") {
@@ -71,9 +79,35 @@ export function createApp({ input, output, color = false, view = createDashboard
     input.on("keypress", onKey);
     output.on("resize", onResize);
     input.resume();
-    view.connect?.(redraw);
+    view.connect?.({ redraw, suspend });
     render();
     return done;
+  }
+
+  // Hands the terminal to another program, like an editor, while `task` runs,
+  // and takes it back afterwards: the normal screen with the cursor, and the
+  // keys, then the alternate screen again, drawn anew. As in stop(), the
+  // normal screen comes back before raw mode goes off. `task` gets a function
+  // that writes to the normal screen.
+  async function suspend(task) {
+    suspended = true;
+    output.write(terminal.showCursor + terminal.leaveAlternateScreen);
+    input.off("keypress", onKey);
+    input.setRawMode(false);
+    input.pause();
+    try {
+      return await task((text) => output.write(text));
+    } finally {
+      suspended = false;
+      if (running) {
+        output.write(terminal.enterAlternateScreen + terminal.hideCursor);
+        input.setRawMode(true);
+        input.on("keypress", onKey);
+        input.resume();
+        screen.clear();
+        render();
+      }
+    }
   }
 
   // Restores the terminal, and ends the UI with `error` if there's one. The

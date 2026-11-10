@@ -8,7 +8,7 @@ import { createApp } from "../src/tui/app.js";
 import { describeCommands } from "../src/tui/commands.js";
 import { createDashboard, minimum } from "../src/tui/dashboard.js";
 import { box, center, createScreen, pad, paints, rowWidth, spread, terminal, truncate, truncateStart, width } from "../src/tui/screen.js";
-import { fakeTerminal, pressKeys, runCli, screenTerminalEnv, terminalEnv, writeTempConfig } from "./helpers.js";
+import { fakeTerminal, pressKeys, runCli, screenTerminalEnv, tempDir, terminalEnv, writeTempConfig } from "./helpers.js";
 
 // The terminal side of `toolsmith ui` (src/tui/app.js), the drawing helpers
 // (src/tui/screen.js), and the command itself. ui-navigation.test.js has the
@@ -31,9 +31,17 @@ function assertRestored({ input, events }) {
   assert.ok(input.isPaused());
 }
 
-test("the UI starts on the alternate screen with the cursor hidden, and fills the terminal", async () => {
+// A dashboard whose Files panel shows an empty temp folder, so that no test
+// reads the repository; it stops when the test ends.
+function dashboard(t, options = {}) {
+  const view = createDashboard({ cwd: tempDir(t), editor: null, ...options });
+  t.after(() => view.dispose());
+  return view;
+}
+
+test("the UI starts on the alternate screen with the cursor hidden, and fills the terminal", async (t) => {
   const term = fakeTerminal(60, 15);
-  const app = createApp({ ...term, view: createDashboard({ folder: "my-project" }) });
+  const app = createApp({ ...term, view: dashboard(t, { folder: "my-project" }) });
   app.start();
   assert.ok(term.events[0].startsWith(terminal.enterAlternateScreen + terminal.hideCursor));
   assert.equal(term.input.isRaw, true);
@@ -51,9 +59,9 @@ for (const [label, key] of [
   ["q", "q"],
   ["Ctrl+C", "\x03"],
 ]) {
-  test(`${label} ends the UI, leaving the alternate screen before turning raw mode off`, async () => {
+  test(`${label} ends the UI, leaving the alternate screen before turning raw mode off`, async (t) => {
     const term = fakeTerminal();
-    const app = createApp(term);
+    const app = createApp({ ...term, view: dashboard(t) });
     app.start();
     term.input.write(key);
     await app.done;
@@ -61,12 +69,12 @@ for (const [label, key] of [
   });
 }
 
-test("a crash restores the terminal in the same order, and then reports the error", async () => {
+test("a crash restores the terminal in the same order, and then reports the error", async (t) => {
   // While drawing the first frame, while redrawing after a resize, and while
   // handling a key.
   for (const when of ["start", "resize", "key"]) {
     const term = fakeTerminal();
-    const dashboard = createDashboard();
+    const real = dashboard(t);
     let frames = 0;
     const view = {
       render(size, paint) {
@@ -74,7 +82,7 @@ test("a crash restores the terminal in the same order, and then reports the erro
         if (when === "start" || (when === "resize" && frames > 1)) {
           throw new Error(`broken at ${when}`);
         }
-        return dashboard.render(size, paint);
+        return real.render(size, paint);
       },
       key() {
         throw new Error("broken at key");
@@ -92,9 +100,9 @@ test("a crash restores the terminal in the same order, and then reports the erro
   }
 });
 
-test("stopping twice restores the terminal once", async () => {
+test("stopping twice restores the terminal once", async (t) => {
   const term = fakeTerminal();
-  const app = createApp(term);
+  const app = createApp({ ...term, view: dashboard(t) });
   app.start();
   app.stop();
   app.stop();
@@ -102,9 +110,9 @@ test("stopping twice restores the terminal once", async () => {
   assert.equal(term.events.filter((event) => event === "raw off").length, 1);
 });
 
-test("a resize clears the screen and redraws it at the new size", async () => {
+test("a resize clears the screen and redraws it at the new size", async (t) => {
   const term = fakeTerminal(60, 15);
-  const app = createApp(term);
+  const app = createApp({ ...term, view: dashboard(t) });
   app.start();
   Object.assign(term.output, { columns: 80, rows: 20 });
   const before = term.events.length;
@@ -116,9 +124,10 @@ test("a resize clears the screen and redraws it at the new size", async () => {
   await app.done;
 });
 
-test(`below ${minimum.columns}x${minimum.rows} the UI says the terminal is too small, until it's bigger again`, async () => {
+test(`below ${minimum.columns}x${minimum.rows} the UI says the terminal is too small, until it's bigger again`, async (t) => {
+  const view = dashboard(t);
   const shows = (columns, rows) =>
-    createDashboard()
+    view
       .render({ columns, rows }, paints(false))
       .map(plain)
       .join("\n");
@@ -126,11 +135,11 @@ test(`below ${minimum.columns}x${minimum.rows} the UI says the terminal is too s
   assert.match(shows(100, 9), /Terminal too small/);
   assert.doesNotMatch(shows(40, 10), /too small/);
   // However small, every row still fits.
-  const tiny = createDashboard().render({ columns: 5, rows: 2 }, paints(false)).map(plain);
+  const tiny = view.render({ columns: 5, rows: 2 }, paints(false)).map(plain);
   assert.deepEqual(tiny.map(width), [5, 4]);
 
   const term = fakeTerminal(60, 15);
-  const app = createApp(term);
+  const app = createApp({ ...term, view: dashboard(t) });
   app.start();
   Object.assign(term.output, { columns: 30, rows: 8 });
   term.output.emit("resize");
@@ -142,20 +151,20 @@ test(`below ${minimum.columns}x${minimum.rows} the UI says the terminal is too s
   await app.done;
 });
 
-test("every screen uses only the 16 basic colors, never magenta, and none when colors are off", () => {
+test("every screen uses only the 16 basic colors, never magenta, and none when colors are off", (t) => {
   // Each state the dashboard can be in, at a normal size and a too small one:
-  // the panels, a filter, a command's form and its message (rename needs
-  // values), an opened item, and the overlay. ui-commands.test.js checks a
-  // command's output.
+  // the panels, the Files panel, a filter, a command's form and its message
+  // (rename needs values), the rename preview's form, and the overlay.
+  // ui-commands.test.js checks a command's output, ui-files.test.js a preview.
   const commands = describeCommands(createProgram()).filter((command) => command.name === "rename");
-  const states = [[], ["nextPanel"], ["startFilter"], ["open"], ["open", "runCommand"], ["nextPanel", "open"], ["showHelp"]];
+  const states = [[], ["nextPanel"], ["startFilter"], ["open"], ["open", "runCommand"], ["nextPanel", "renamePreview"], ["showHelp"]];
   const parameters = (color) =>
     states.flatMap((actions) =>
       [
         { columns: 60, rows: 15 },
         { columns: 20, rows: 5 },
       ].flatMap((size) => {
-        const view = createDashboard({ folder: "x", commands });
+        const view = dashboard(t, { folder: "x", commands });
         for (const action of actions) {
           view.actions[action]();
         }
@@ -194,12 +203,41 @@ test("screen helpers fit text into a number of columns", () => {
   assert.deepEqual(box([], 6), ["┌────┐", "└────┘"]);
 });
 
-test("wide characters count as one column each, a known limit", () => {
-  // Most terminals show these two in four columns.
-  assert.equal(width("日本"), 2);
-  // An emoji is one character, even though JavaScript stores it in two units.
-  assert.equal(width("😀"), 1);
-  assert.equal(truncate("😀😀😀", 2), "😀…");
+test("wide characters take two columns, as terminals show them, and fit when cut and padded", () => {
+  const cases = [
+    ["日本語", 6], // Chinese and Japanese characters
+    ["한국어", 6], // Hangul
+    ["Ａｂ", 4], // fullwidth letters
+    ["ｶﾀｶﾅ", 4], // halfwidth katakana is one column
+    ["😀", 2], // an emoji
+    ["👨‍👩‍👧", 2], // a family: three emoji joined into one
+    ["🇯🇵", 2], // a flag
+    ["❤️", 2], // a symbol turned into an emoji
+    ["❤", 1], // the same symbol as text
+    ["é", 1], // e and a combining accent
+    ["a​b", 2], // a zero-width space
+  ];
+  for (const [text, columns] of cases) {
+    assert.equal(width(text), columns, text);
+  }
+  // A two-column character that doesn't fit is left out whole.
+  assert.equal(truncate("日本語テキスト", 5), "日本…");
+  assert.equal(truncate("日本語テキスト", 6), "日本…");
+  assert.equal(truncateStart("日本語テキスト", 5), "…スト");
+  assert.equal(truncate("😀😀😀", 4), "😀…");
+  assert.equal(truncate("👨‍👩‍👧 family", 3), "👨‍👩‍👧…");
+  for (const [text, columns] of [
+    ["日本", 5],
+    ["日本語テキスト", 5],
+    ["😀 ok", 6],
+    ["a日b", 3],
+  ]) {
+    assert.equal(width(pad(text, columns)), columns, `pad(${text}, ${columns})`);
+    assert.equal(width(center(text, columns)), columns, `center(${text}, ${columns})`);
+    assert.equal(width(spread(text, "1 KB", columns + 5)), columns + 5, `spread(${text})`);
+  }
+  assert.equal(pad("日本", 5), "日本 ");
+  assert.equal(center("日本", 6), " 日本 ");
 });
 
 test("the screen writes only the rows that changed", () => {

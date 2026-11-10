@@ -10,11 +10,20 @@ import { pad, truncateStart, width, wrap } from "./screen.js";
 //   text    typed in; an argument, or an option that takes a value
 //   check   ticked or not; an option without a value, like --json or --no-git
 //   choice  one of the option's choices, or none
-export function createForm(command, { platform = process.platform } = {}) {
+// `values` fill in fields by label ({ "[paths...]": "src", "--dry-run": true }),
+// and the fields `locked` keep their values: the rename preview of the Files
+// panel always has --dry-run.
+export function createForm(command, { platform = process.platform, values = {}, locked = [] } = {}) {
   const fields = [
     ...command.arguments.map((argument) => ({ ...argument, kind: argument.choices ? "choice" : "text", argument: true })),
     ...command.options.map((option) => ({ ...option, required: option.mandatory })),
-  ].map((field) => ({ ...field, text: "", checked: false, choice: -1 }));
+  ].map((field) => ({
+    ...field,
+    text: typeof values[field.label] === "string" ? values[field.label] : "",
+    checked: values[field.label] === true,
+    choice: -1,
+    locked: locked.includes(field.label),
+  }));
   const labelWidth = Math.min(24, Math.max(0, ...fields.map((field) => width(field.label))));
   const list = createList(fields, { label: (field) => rowText(field), empty: "No arguments or options: Enter runs it" });
   const form = { command, fields, list, message: "" };
@@ -27,7 +36,7 @@ export function createForm(command, { platform = process.platform } = {}) {
   function rowText(field) {
     let value;
     if (field.kind === "check") {
-      value = field.checked ? "[x]" : "[ ]";
+      value = `${field.checked ? "[x]" : "[ ]"}${field.locked ? " (always, here)" : ""}`;
     } else if (field.kind === "choice") {
       value = `< ${field.choice >= 0 ? field.choices[field.choice] : "none"} >`;
     } else {
@@ -42,16 +51,27 @@ export function createForm(command, { platform = process.platform } = {}) {
     form.message = "";
   };
 
+  // Whether the selected field can't be changed; says so if it can't.
+  const isLocked = () => {
+    if (current()?.locked) {
+      form.message = `${current().label} can't be changed here`;
+      return true;
+    }
+    return false;
+  };
+
   Object.assign(form, {
     // Typing goes into the selected text field.
     acceptsText: () => current()?.kind === "text",
     type(text) {
-      current().text += text;
-      changed();
+      if (!isLocked()) {
+        current().text += text;
+        changed();
+      }
     },
     erase() {
       const field = current();
-      if (field?.kind === "text") {
+      if (field?.kind === "text" && !isLocked()) {
         field.text = [...field.text].slice(0, -1).join("");
         changed();
       }
@@ -59,6 +79,9 @@ export function createForm(command, { platform = process.platform } = {}) {
     // Space ticks a checkbox or moves to the next choice.
     toggle(step = 1) {
       const field = current();
+      if (isLocked()) {
+        return;
+      }
       if (field?.kind === "check") {
         field.checked = !field.checked;
       } else if (field?.kind === "choice") {

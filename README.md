@@ -83,7 +83,7 @@ toolsmith git template unset              # stop using it
 
 ### Dashboard
 
-`toolsmith ui` opens a full-screen dashboard in the terminal, with three panels: commands, files and git status. The Files and Git status panels hold sample items for now, while the file browser and git status panel are being built (see M7 in the [roadmap](ROADMAP.md)).
+`toolsmith ui` opens a full-screen dashboard in the terminal, with three panels: commands, files and git status. The Git status panel is still being built (see M7 in the [roadmap](ROADMAP.md)).
 
 ```sh
 toolsmith ui            # ? shows every shortcut, q quits
@@ -93,11 +93,21 @@ The Commands panel lists every command and subcommand, plugin commands included,
 
 The command runs as a separate toolsmith process, without a shell, and its output streams into a panel that you can scroll; lines from stderr are bold rather than colored. Esc or Ctrl+C cancels it, along with any programs it started, and the panel shows the exit code and how long it ran. Commands that can ask questions, like `new` and `git clean-branches`, only run when `--yes` is ticked in their form, because the dashboard can't answer them; otherwise the form says so, and you can run them in a terminal of their own.
 
+The Files panel shows the current folder as a tree, leaving out `.git` and `node_modules` like the file tools do. Folders are read when you open them, and their sizes are added up in the background: a folder shows "…" until its size is known, and keys never wait for it, however big the folder. Symlinks are shown but not followed, and entries that can't be read are reported as warnings at the bottom of the screen.
+
+- Enter on a file shows it, in a view you can scroll. Escape codes are taken out, and a binary file or one over 1 MB gets a short note instead.
+- `e` edits a file in your `VISUAL` or `EDITOR` (like `code --wait`). The dashboard steps aside while the editor runs, comes back when it closes, and shows the file as it is now.
+- `o` opens a file or folder in its default app: with `start` on Windows, `open` on macOS and `xdg-open` on Linux.
+- `s`, `d` and `r` run `size`, `dupes` and a rename preview on the selected folder (or the folder of the selected file). The rename preview is the `rename` form, filled in with the folder, and with `--dry-run` that can't be turned off.
+
+None of this goes through a shell. File names are passed to programs as they are: on Windows, where `start` and `.cmd` editors need cmd.exe, they reach it in environment variables, so characters like `&` and `%` in a name can't be read as commands.
+
 | Keys | What they do |
 |---|---|
 | Up and Down, or `k` and `j`; PgUp, PgDn, Home, End | Move in the list, or scroll the output |
-| Tab and Shift+Tab, Left and Right, or `h` and `l` | Switch panels |
+| Tab and Shift+Tab, Left and Right, or `h` and `l` | Switch panels (in the Files panel, Left and Right close and open folders, and Tab switches) |
 | Enter, Esc | Open the selected item, go back |
+| In the Files panel: `e`, `o`, `s`, `d`, `r` | Edit, open in its default app, size report, duplicates, rename preview |
 | `/` | Filter the list as you type, in any case; Backspace edits, Enter keeps the filter, Esc clears it |
 | In a form: Tab, Up, Down, Space, Enter | Go to the next or previous field, tick or choose, run the command |
 | While a command runs: Esc or Ctrl+C | Cancel it |
@@ -106,9 +116,7 @@ The command runs as a separate toolsmith process, without a shell, and its outpu
 
 The keys work the same in Windows Terminal, the classic Windows console, macOS Terminal and Linux terminals, whichever codes they send, with one exception: with Node.js 22, the classic Windows console sends Shift+Tab as a plain Tab, so use Left or `h` to go to the previous panel there.
 
-It needs a terminal of at least 40×10, and says so in a smaller one until the window is made bigger. Because it needs a terminal for both its input and its output, it refuses to start in scripts, in CI and with its input or output redirected; use the plain commands there. Its colors follow `--no-color`, `NO_COLOR` and the `"color"` setting, and it uses only the 16 basic colors, with inverse bars that stay readable without any. Whatever ends it, including Ctrl+C and errors, the terminal is put back as it was.
-
-Known limit: wide characters, like Chinese, Japanese and Korean ones and most emoji, count as one column, so rows that have them don't line up yet.
+It needs a terminal of at least 40×10, and says so in a smaller one until the window is made bigger. Because it needs a terminal for both its input and its output, it refuses to start in scripts, in CI and with its input or output redirected; use the plain commands there. Its colors follow `--no-color`, `NO_COLOR` and the `"color"` setting, and it uses only the 16 basic colors, with inverse bars that stay readable without any. Whatever ends it, including Ctrl+C and errors, the terminal is put back as it was. Rows line up with wide characters too: Chinese, Japanese and Korean characters and emoji take the two columns terminals give them.
 
 ## Plugins
 

@@ -16,10 +16,12 @@ import { warn } from "../output.js";
 //   ignore     glob patterns; one without "/" (like "node_modules" or "*.log")
 //              matches a name at any depth, one with "/" (like "docs/**")
 //              matches the path from the root. Ignored folders aren't opened.
+//   onWarning  called with the message for each entry that's skipped
+//              (default: printed as a warning)
 //
 // Symlinks are listed but never followed, so a link can't cause a loop.
 // Anything below the root that can't be read is skipped with a warning.
-export async function* walk(root, { recursive = true, maxDepth = Infinity, ignore = [] } = {}) {
+export async function* walk(root, { recursive = true, maxDepth = Infinity, ignore = [], onWarning = warn } = {}) {
   const isIgnored = await ignoreMatcher(ignore);
   const depthLimit = recursive ? maxDepth : 1;
 
@@ -36,7 +38,7 @@ export async function* walk(root, { recursive = true, maxDepth = Infinity, ignor
         try {
           details = statDetails(await lstat(path, { bigint: true }));
         } catch (err) {
-          warn(`skipped ${path} (${fsErrorReason(err)})`);
+          onWarning(`skipped ${path} (${fsErrorReason(err)})`);
           continue;
         }
       }
@@ -47,7 +49,7 @@ export async function* walk(root, { recursive = true, maxDepth = Infinity, ignor
         try {
           children = await readFolder(path);
         } catch (err) {
-          warn(`skipped ${path} (${fsErrorReason(err)})`);
+          onWarning(`skipped ${path} (${fsErrorReason(err)})`);
           continue;
         }
         yield* walkFolder(path, relativePath, children, depth + 1);
