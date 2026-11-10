@@ -157,11 +157,25 @@ export async function helpListing(...words) {
 }
 
 // Creates a temp folder that is deleted when the test `t` finishes. On
-// Windows, a process that has just ended can hold on to its folder for a
-// moment, so deleting it is tried a few times.
+// Windows, a folder can't be deleted while a process runs in it, like one that
+// was just cancelled and is still ending, and rmSync then fails at once
+// (EPERM or EBUSY; its maxRetries doesn't cover that), so deleting it is tried
+// again for up to two seconds.
 export function tempDir(t) {
   const dir = mkdtempSync(join(tmpdir(), "toolsmith-test-"));
-  t.after(() => rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 }));
+  t.after(async () => {
+    for (let attempt = 1; ; attempt++) {
+      try {
+        rmSync(dir, { recursive: true, force: true });
+        return;
+      } catch (err) {
+        if (attempt >= 40 || !["EPERM", "EBUSY", "ENOTEMPTY"].includes(err.code)) {
+          throw err;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+    }
+  });
   return dir;
 }
 

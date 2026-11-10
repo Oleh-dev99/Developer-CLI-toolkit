@@ -153,6 +153,13 @@ export function wrap(text, columns) {
   return lines;
 }
 
+// A name, like a file's, with each control character in it (a newline, or the
+// Esc that starts an escape code) shown as "?", so that it can't break the
+// screen.
+export function printable(name) {
+  return name.replace(/[\x00-\x1f\x7f-\x9f]/g, "?");
+}
+
 // A line of text from a program or a file, ready to show: what's left after
 // the last carriage return (progress that rewrites its line), without escape
 // codes or other control characters, and with tabs turned into spaces up to

@@ -85,6 +85,9 @@ async function session(t, { files = project, columns = 80, rows = 20, ...options
   };
   await ui.press(key.tab);
   await until(() => !view.tree.list.selected() === false && view.state.message === "" && ui.screen().includes(" Files "), "the files");
+  // The project's .git folder makes the dashboard run git once, in the
+  // project; a folder that git still runs in can't be deleted on Windows.
+  await view.gitStatus.settled();
   return ui;
 }
 
@@ -184,6 +187,10 @@ test("a symlink is shown, but never followed", async (t) => {
   }
   linked.actions.expandEntry();
   assert.equal(linked.state.preview, null);
+  // The .git folder makes the dashboard run git once, in the project; on
+  // Windows, a folder that git still runs in can't be deleted.
+  linked.dispose();
+  await linked.gitStatus.settled();
 });
 
 test("Enter on a file shows it, with its lines scrolling; Esc goes back", async (t) => {

@@ -12,11 +12,13 @@ import { createDashboard } from "../src/tui/dashboard.js";
 import { hintsFor, keyOf, sections, shortcutLabel } from "../src/tui/keys.js";
 import { createList } from "../src/tui/list.js";
 import { paints } from "../src/tui/screen.js";
-import { fakeTerminal, pressKeys } from "./helpers.js";
+import { fakeTerminal, pressKeys, tempDir } from "./helpers.js";
 
 // Keyboard navigation in `toolsmith ui`: the key table (src/tui/keys.js), the
 // list component (src/tui/list.js) and the dashboard (src/tui/dashboard.js),
-// driven with the codes terminals send, at a fixed size of 40x10.
+// driven with the codes terminals send, at a fixed size of 40x10. The folder
+// isn't a git repository, so there's no Git status panel (see
+// ui-git.test.js for that one).
 
 const plain = (text) => text.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, "");
 const key = {
@@ -47,14 +49,14 @@ for (let number = 1; number <= 24; number++) {
 after(() => rmSync(folder, { recursive: true, force: true, maxRetries: 10 }));
 
 // The UI in a pretend terminal, with keys to press and the screen as text,
-// once the Files panel has read its folder.
-async function session(columns = 40, rows = 10) {
+// once the Files panel shows `shows`: when it has read its folder.
+async function session(columns = 40, rows = 10, { cwd = folder, shows = "file01.txt" } = {}) {
   const term = fakeTerminal(columns, rows);
-  const view = createDashboard({ folder: "my-project", commands, cwd: folder, editor: null });
+  const view = createDashboard({ folder: "my-project", commands, cwd, editor: null });
   const app = createApp({ ...term, view });
   app.start();
   // Until the files are read and on screen; a redraw comes a moment later.
-  while (view.tree.list.count() < 24 || !app.rows().some((row) => row.includes("file01"))) {
+  while (!app.rows().some((row) => row.includes(shows))) {
     await new Promise((resolve) => setTimeout(resolve, 10));
   }
   return {
@@ -72,45 +74,45 @@ async function session(columns = 40, rows = 10) {
 
 test("scripted key presses at 40x10: panels, End, a filter, a command's form, and back", async () => {
   const ui = await session();
+  // Outside a git repository, the two panels share the width.
   assert.deepEqual(ui.screen(), [
     " toolsmith ui                my-project ",
-    " Commands   │ Files 1/24 │ Git status   ",
-    "> config    │> file01.txt│  Nothing her…",
-    "  dupes     │  file02.txt│              ",
-    "  git clean…│  file03.txt│              ",
-    "  git recent│  file04.txt│              ",
-    "  git templ…│  file05.txt│              ",
-    "  git templ…│  file06.txt│              ",
-    "  git templ…│  file07.txt│              ",
+    " Commands     1/15 │ Files         1/24 ",
+    "> config           │>   file01.txt   1 B",
+    "  dupes            │    file02.txt   2 B",
+    "  git clean-branch…│    file03.txt   3 B",
+    "  git recent       │    file04.txt   4 B",
+    "  git template list│    file05.txt   5 B",
+    "  git template show│    file06.txt   6 B",
+    "  git template use │    file07.txt   7 B",
     " ?: shortcuts  q: quit  /: filter  Ent…",
   ]);
 
   // Tab to Files, End: the list scrolls to keep the last file in view.
   await ui.press(key.tab, key.end);
   assert.deepEqual(ui.screen().slice(1, 9), [
-    " Commands   │ Files      │ Git status   ",
-    "> config    │  file18.txt│  Nothing her…",
-    "  dupes     │  file19.txt│              ",
-    "  git clean…│  file20.txt│              ",
-    "  git recent│  file21.txt│              ",
-    "  git templ…│  file22.txt│              ",
-    "  git templ…│  file23.txt│              ",
-    "  git templ…│> file24.txt│              ",
+    " Commands     1/15 │ Files        24/24 ",
+    "> config           │    file18.txt  18 B",
+    "  dupes            │    file19.txt  19 B",
+    "  git clean-branch…│    file20.txt  20 B",
+    "  git recent       │    file21.txt  21 B",
+    "  git template list│    file22.txt  22 B",
+    "  git template show│    file23.txt  23 B",
+    "  git template use │>   file24.txt  24 B",
   ]);
 
-  // Back to Commands, and filter it. The panel is narrow, so the filter takes
-  // the title's place.
+  // Back to Commands, and filter it.
   await ui.press(key.shiftTab, "/", "g", "i", "t");
   assert.deepEqual(ui.screen(), [
     " toolsmith ui                my-project ",
-    " /git_  1/6 │ Files      │ Git status   ",
-    "> git clean…│  file18.txt│  Nothing her…",
-    "  git recent│  file19.txt│              ",
-    "  git templ…│  file20.txt│              ",
-    "  git templ…│  file21.txt│              ",
-    "  git templ…│  file22.txt│              ",
-    "  git templ…│  file23.txt│              ",
-    "            │> file24.txt│              ",
+    " Commands /git_    │ Files        24/24 ",
+    "> git clean-branch…│    file18.txt  18 B",
+    "  git recent       │    file19.txt  19 B",
+    "  git template list│    file20.txt  20 B",
+    "  git template show│    file21.txt  21 B",
+    "  git template use │    file22.txt  22 B",
+    "  git template uns…│    file23.txt  23 B",
+    "                   │>   file24.txt  24 B",
     " Enter: done  Esc: clear  Backspace: d…",
   ]);
 
@@ -131,13 +133,17 @@ test("scripted key presses at 40x10: panels, End, a filter, a command's form, an
 
   // Esc goes back, with the filter still on; Esc again clears it.
   await ui.press(key.escape);
-  assert.equal(ui.screen()[1], " /git   2/6 │ Files      │ Git status   ");
+  assert.equal(ui.screen()[1], " Commands /git 2/6 │ Files        24/24 ");
   await ui.press(key.escape);
-  assert.equal(ui.screen()[1], " Commands   │ Files      │ Git status   ");
+  assert.equal(ui.screen()[1], " Commands     4/15 │ Files        24/24 ");
   // The selection stays on the command that was opened.
-  assert.equal(ui.screen()[5], "> git recent│  file21.txt│              ");
+  assert.equal(ui.screen()[5], "> git recent       │    file21.txt  21 B");
   await ui.end();
 });
+
+// The lines in the shortcuts overlay: each section's title and shortcuts, with
+// a blank line between sections.
+const overlayLines = sections.reduce((lines, section) => lines + section.shortcuts.length + 1, sections.length - 1);
 
 test("the shortcuts overlay lists the key table, scrolls, and closes with Esc or ?", async () => {
   const ui = await session();
@@ -145,19 +151,19 @@ test("the shortcuts overlay lists the key table, scrolls, and closes with Esc or
   assert.deepEqual(ui.screen(), [
     " toolsmith ui                my-project ",
     "┌ Shortcuts ───────────────────────────┐",
-    "│ Commands and Git status panels       │",
+    "│ Commands panel                       │",
     "│   Up, k               move up        │",
     "│   Down, j             move down      │",
     "│   PgUp                move up a page │",
     "│   PgDn                move down a p… │",
     "│   Home                go to the fir… │",
-    "└ 1-6/104 ─────────────────────────────┘",
+    `└ 1-6/${overlayLines} ${"─".repeat(36 - `1-6/${overlayLines}`.length)}┘`,
     " Esc: close  Down: scroll              ",
   ]);
   await ui.press("j", key.down);
-  assert.match(ui.screen()[8], /^└ 3-8\/104 /);
-  await ui.press(...Array.from({ length: 20 }, () => key.pageDown));
-  assert.match(ui.screen()[8], /^└ 99-104\/104 /);
+  assert.match(ui.screen()[8], new RegExp(`^└ 3-8/${overlayLines} `));
+  await ui.press(...Array.from({ length: 30 }, () => key.pageDown));
+  assert.match(ui.screen()[8], new RegExp(`^└ ${overlayLines - 5}-${overlayLines}/${overlayLines} `));
   await ui.press(key.escape);
   assert.match(ui.screen()[1], /Commands/);
   await ui.press("?", "?");
@@ -167,16 +173,17 @@ test("the shortcuts overlay lists the key table, scrolls, and closes with Esc or
 
 test("every shortcut in the key table is in the overlay, and the hints at the bottom come from it", async () => {
   // Tall enough for the whole overlay.
-  const ui = await session(120, 110);
+  const ui = await session(120, overlayLines + 6);
   await ui.press("?");
   const overlay = ui.screen().join("\n");
+  assert.match(overlay, new RegExp(`└ 1-${overlayLines}/${overlayLines} `));
   for (const shortcut of sections.flatMap((section) => section.shortcuts)) {
     assert.match(overlay, new RegExp(`│ +${escape(shortcutLabel(shortcut))} +${escape(shortcut.description)} +│`), shortcutLabel(shortcut));
   }
   for (const section of sections) {
     assert.match(overlay, new RegExp(`│ ${escape(section.title)} +│`));
   }
-  const footer = () => ui.screen()[109].trim();
+  const footer = () => ui.screen().at(-1).trim();
   assert.equal(footer(), hintsFor("help"));
   await ui.press(key.escape);
   assert.equal(footer(), hintsFor("panels"));
@@ -215,7 +222,18 @@ test("the key table and the handlers can't drift apart", () => {
     }
   }
   // Every context the dashboard can be in has its shortcuts.
-  assert.deepEqual(sections.map((section) => section.context).sort(), ["files", "filter", "form", "help", "item", "output", "panels", "preview", "running"]);
+  assert.deepEqual(sections.map((section) => section.context).sort(), [
+    "dryrun",
+    "files",
+    "filter",
+    "form",
+    "git",
+    "help",
+    "output",
+    "panels",
+    "preview",
+    "running",
+  ]);
   // Ctrl+C cancels a running command, and quits everywhere else. q quits too,
   // except where it's typed, and while a command runs.
   for (const section of sections) {
@@ -250,7 +268,9 @@ const codes = {
   "?": ["?"],
   k: ["k"],
   Q: ["Q"],
+  R: ["R"],
   space: [" "],
+  f5: ["\x1b[15~"],
 };
 
 // The key names that readline and keyOf() make of `sequence`.
@@ -277,9 +297,9 @@ test("the codes different terminals send for a key all mean the same key", async
 test("the classic Windows console's codes with Node.js 22 move around like the others", async () => {
   const ui = await session();
   await ui.press("\t", "\x1b[4~");
-  assert.match(ui.screen()[8], /> file24\.txt/);
+  assert.match(ui.screen()[8], /> +file24\.txt/);
   await ui.press("\x1b[1~");
-  assert.match(ui.screen()[2], /> file01\.txt/);
+  assert.match(ui.screen()[2], /> +file01\.txt/);
   await ui.press("/", "x", "\b");
   assert.match(ui.screen()[1], /Files \/_/);
   await ui.end();
@@ -297,17 +317,17 @@ test("arrow keys and h, j, k, l move, and the panels wrap around", async () => {
     const header = ui.raw()[1].split("│");
     return plain(header.find((part) => part.startsWith("\x1b[7m"))).trim();
   };
-  assert.equal(focusedTitle(), "Commands");
+  assert.ok(focusedTitle().startsWith("Commands"), focusedTitle());
   // In the Files panel, Left and Right close and open folders, so Tab and
   // Shift+Tab go on from there.
   for (const [press, title] of [
     ["l", "Files"],
-    [key.tab, "Git status"],
-    [key.right, "Commands"],
-    [key.shiftTab, "Git status"],
+    [key.tab, "Commands"],
+    [key.right, "Files"],
+    [key.shiftTab, "Commands"],
     ["h", "Files"],
     [key.shiftTab, "Commands"],
-    [key.left, "Git status"],
+    [key.left, "Files"],
   ]) {
     await ui.press(press);
     assert.ok(focusedTitle().startsWith(title), `after ${JSON.stringify(press)}: ${focusedTitle()}`);
@@ -319,12 +339,12 @@ test("PgDn and PgUp move a page, and the selection stays in view", async () => {
   const ui = await session();
   await ui.press(key.tab, key.pageDown);
   // Seven rows of files are in view; a page is one less, so one stays.
-  assert.match(ui.screen()[8], /> file07\.txt/);
+  assert.match(ui.screen()[8], /> +file07\.txt/);
   await ui.press(key.pageDown);
-  assert.match(ui.screen()[8], /> file13\.txt/);
+  assert.match(ui.screen()[8], /> +file13\.txt/);
   assert.match(ui.screen()[2], /file07\.txt/);
   await ui.press(key.pageUp);
-  assert.match(ui.screen()[2], /> file07\.txt/);
+  assert.match(ui.screen()[2], /> +file07\.txt/);
   await ui.end();
 });
 
@@ -335,7 +355,7 @@ test("the focused panel stands out without colors: an inverse header and selecti
   const parts = header.split("│");
   assert.deepEqual(
     parts.map((part) => part.startsWith("\x1b[7m")),
-    [false, true, false],
+    [false, true],
   );
   const cells = firstRow.split("│");
   assert.ok(cells[1].startsWith("\x1b[7m>   file01.txt"), JSON.stringify(cells[1]));
@@ -367,13 +387,13 @@ test("/ filters as you type: any case, Backspace edits, Esc clears, and keys lik
   await ui.end();
 });
 
-test("an empty panel says so, and Enter there opens nothing", async () => {
-  const ui = await session(60, 12);
-  await ui.press(key.shiftTab);
-  assert.match(ui.screen()[2], /│ {2}Nothing here yet +$/);
-  await ui.press(key.enter);
-  assert.match(ui.screen()[1], /Git status/);
-  assert.match(ui.screen()[11], /^ \?: shortcuts/);
+test("an empty panel says so, and Enter there opens nothing", async (t) => {
+  const ui = await session(60, 12, { cwd: tempDir(t), shows: "Empty folder" });
+  await ui.press(key.tab);
+  assert.match(ui.screen()[2], /│ {2}Empty folder +$/);
+  await ui.press(key.enter, key.right);
+  assert.equal(ui.view.context(), "files");
+  assert.match(ui.screen()[2], /│ {2}Empty folder +$/);
   await ui.end();
 });
 
@@ -421,6 +441,20 @@ test("a list keeps its selection in view, filters in any case, and says when it'
 
   assert.deepEqual(createList([], { empty: "No items" }).render(10, 2), ["  No items", "          "]);
   assert.equal(createList([]).position(), "");
+});
+
+test("a list's new items keep the selection on the same item, or else in the same place", () => {
+  const rows = (...ids) => ids.map((id) => ({ id }));
+  const list = createList(rows("a", "b", "c"), { label: (row) => row.id, key: (row) => row.id });
+  list.move(1);
+  list.setItems(rows("new", "a", "b", "c"));
+  assert.equal(list.selected().id, "b");
+  list.setItems(rows("a", "c", "d"));
+  assert.equal(list.selected().id, "d");
+  list.setItems(rows("a"));
+  assert.equal(list.selected().id, "a");
+  list.setItems([]);
+  assert.equal(list.selected(), undefined);
 });
 
 test("a list that only scrolls has no selection, and moving scrolls it", () => {

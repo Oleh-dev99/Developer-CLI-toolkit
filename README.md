@@ -83,7 +83,7 @@ toolsmith git template unset              # stop using it
 
 ### Dashboard
 
-`toolsmith ui` opens a full-screen dashboard in the terminal, with three panels: commands, files and git status. The Git status panel is still being built (see M7 in the [roadmap](ROADMAP.md)).
+`toolsmith ui` opens a full-screen dashboard in the terminal, with three panels: commands, files and, in a git repository, git status.
 
 ```sh
 toolsmith ui            # ? shows every shortcut, q quits
@@ -102,12 +102,21 @@ The Files panel shows the current folder as a tree, leaving out `.git` and `node
 
 None of this goes through a shell. File names are passed to programs as they are: on Windows, where `start` and `.cmd` editors need cmd.exe, they reach it in environment variables, so characters like `&` and `%` in a name can't be read as commands.
 
+The Git status panel shows the branch, its upstream and how far it is ahead and behind (or that HEAD is detached, that there's no upstream, or that it's gone), then the conflicted, staged, unstaged and untracked files, renames as `old → new`. It's read with `git status --porcelain=v2 --branch -z`, without a shell, so names with spaces, wide characters and even newlines come through as they are. Enter on a file shows it.
+
+- `c` shows the recent commits, with `git recent`.
+- `b` cleans up merged branches with `git clean-branches`: first a `--dry-run` preview of what would go, then Enter goes on to the command's form, where `--yes` must be ticked as usual (Esc instead leaves everything as it is).
+- F5 or `R` reads the status again.
+
+The dashboard watches the folder (in a repository, the whole repository, `.git` included), leaving out `node_modules`. When files change, the git status and the Files panel's folder sizes are read again, once for each burst of changes, and never with two `git status` running at once. Watching stops when the dashboard ends. On Linux, Node.js watches each folder separately, `node_modules` too (only its changes are ignored), so a very big tree can run out of watches; the dashboard then says so, and F5 still works. Outside a git repository, or when git isn't installed, the panel isn't shown, and the other two share its space.
+
 | Keys | What they do |
 |---|---|
 | Up and Down, or `k` and `j`; PgUp, PgDn, Home, End | Move in the list, or scroll the output |
 | Tab and Shift+Tab, Left and Right, or `h` and `l` | Switch panels (in the Files panel, Left and Right close and open folders, and Tab switches) |
 | Enter, Esc | Open the selected item, go back |
 | In the Files panel: `e`, `o`, `s`, `d`, `r` | Edit, open in its default app, size report, duplicates, rename preview |
+| In the Git status panel: `c`, `b`, F5 or `R` | Recent commits, clean merged branches (a dry run first; Enter goes on), read the status again |
 | `/` | Filter the list as you type, in any case; Backspace edits, Enter keeps the filter, Esc clears it |
 | In a form: Tab, Up, Down, Space, Enter | Go to the next or previous field, tick or choose, run the command |
 | While a command runs: Esc or Ctrl+C | Cancel it |

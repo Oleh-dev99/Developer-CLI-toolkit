@@ -30,6 +30,7 @@ const names = {
   "shift+tab": "Shift+Tab",
   space: "Space",
   "ctrl+c": "Ctrl+C",
+  f5: "F5",
 };
 
 // For each context the UI can be in, its shortcuts: an action, the keys for
@@ -38,7 +39,7 @@ const names = {
 export const sections = [
   {
     context: "panels",
-    title: "Commands and Git status panels",
+    title: "Commands panel",
     shortcuts: [
       { action: "up", keys: ["up", "k"], description: "move up" },
       { action: "down", keys: ["down", "j"], description: "move down" },
@@ -48,7 +49,7 @@ export const sections = [
       { action: "last", keys: ["end"], description: "go to the last item" },
       { action: "nextPanel", keys: ["tab", "right", "l"], description: "go to the next panel", short: "next panel" },
       { action: "previousPanel", keys: ["shift+tab", "left", "h"], description: "go to the previous panel" },
-      { action: "open", keys: ["enter"], description: "open the selected item; a command opens its form", short: "open" },
+      { action: "open", keys: ["enter"], description: "open the command's form", short: "open" },
       { action: "startFilter", keys: ["/"], description: "filter the list as you type", short: "filter" },
       { action: "clearFilter", keys: ["escape"], description: "clear the filter" },
       { action: "showHelp", keys: ["?"], description: "show these shortcuts", short: "shortcuts" },
@@ -82,6 +83,29 @@ export const sections = [
       { action: "quit", keys: ["q", "ctrl+c"], description: "quit", short: "quit" },
     ],
     hints: ["showHelp", "quit", "toggleEntry", "editFile", "openWithApp", "sizeReport", "findDuplicates", "renamePreview"],
+  },
+  {
+    context: "git",
+    title: "Git status panel",
+    shortcuts: [
+      { action: "up", keys: ["up", "k"], description: "move up" },
+      { action: "down", keys: ["down", "j"], description: "move down" },
+      { action: "pageUp", keys: ["pageup"], description: "move up a page" },
+      { action: "pageDown", keys: ["pagedown"], description: "move down a page" },
+      { action: "first", keys: ["home"], description: "go to the first row" },
+      { action: "last", keys: ["end"], description: "go to the last row" },
+      { action: "showGitFile", keys: ["enter"], description: "show the selected file" },
+      { action: "recentCommits", keys: ["c"], description: "recent commits (git recent)", short: "commits" },
+      { action: "cleanBranches", keys: ["b"], description: "clean merged branches, with a --dry-run preview first", short: "branches" },
+      { action: "refreshStatus", keys: ["f5", "R"], description: "read the status again", short: "refresh" },
+      { action: "nextPanel", keys: ["tab", "right", "l"], description: "go to the next panel" },
+      { action: "previousPanel", keys: ["shift+tab", "left", "h"], description: "go to the previous panel" },
+      { action: "startFilter", keys: ["/"], description: "filter the list as you type" },
+      { action: "clearFilter", keys: ["escape"], description: "clear the filter" },
+      { action: "showHelp", keys: ["?"], description: "show these shortcuts", short: "shortcuts" },
+      { action: "quit", keys: ["q", "ctrl+c"], description: "quit", short: "quit" },
+    ],
+    hints: ["showHelp", "quit", "recentCommits", "cleanBranches", "refreshStatus"],
   },
   {
     context: "preview",
@@ -164,14 +188,21 @@ export const sections = [
     hints: ["closeOutput", "down", "quit"],
   },
   {
-    context: "item",
-    title: "In an opened item",
+    context: "dryrun",
+    title: "After a --dry-run preview",
     shortcuts: [
-      { action: "back", keys: ["escape"], description: "go back", short: "back" },
-      { action: "showHelp", keys: ["?"], description: "show these shortcuts", short: "shortcuts" },
+      { action: "continueCommand", keys: ["enter"], description: "go on to the command's form, to do it for real", short: "go on" },
+      { action: "closeOutput", keys: ["escape"], description: "go back", short: "back" },
+      { action: "up", keys: ["up", "k"], description: "scroll up" },
+      { action: "down", keys: ["down", "j"], description: "scroll down", short: "scroll" },
+      { action: "pageUp", keys: ["pageup"], description: "scroll up a page" },
+      { action: "pageDown", keys: ["pagedown"], description: "scroll down a page" },
+      { action: "first", keys: ["home"], description: "scroll to the start" },
+      { action: "last", keys: ["end"], description: "scroll to the end" },
+      { action: "showHelp", keys: ["?"], description: "show these shortcuts" },
       { action: "quit", keys: ["q", "ctrl+c"], description: "quit", short: "quit" },
     ],
-    hints: ["back", "showHelp", "quit"],
+    hints: ["continueCommand", "closeOutput", "down", "quit"],
   },
   {
     context: "help",

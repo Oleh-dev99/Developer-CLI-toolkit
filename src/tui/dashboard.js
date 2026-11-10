@@ -1,5 +1,7 @@
 import { stat } from "node:fs/promises";
+import { join, relative } from "node:path";
 import { count, formatSize } from "../lib/format.js";
+import { git } from "../lib/git.js";
 import { quoteCommandLine } from "../lib/quote.js";
 import { fsErrorReason } from "../lib/walk.js";
 import { createForm } from "./form.js";
@@ -9,18 +11,17 @@ import { editorCommand, openWithApp, runEditor } from "./open.js";
 import { readPreview } from "./preview.js";
 import { runCommand } from "./runner.js";
 import { box, center, pad, rowWidth, spread, truncateStart, width } from "./screen.js";
+import { createGitStatus, findRepository } from "./status.js";
 import { createTree } from "./tree.js";
+import { watchTree } from "./watch.js";
 
-// What `toolsmith ui` shows: three panels side by side (commands, the files
-// of the current folder, and git status), a command's form and its output, a
-// file's preview, an opened item, and the shortcuts overlay (?), and what each
-// key does there.
+// What `toolsmith ui` shows: panels side by side (commands, the files of the
+// current folder, and its git status when it's in a git repository), a
+// command's form and its output, a file's preview, and the shortcuts overlay
+// (?), and what each key does there.
 
 // The smallest terminal the dashboard draws itself in; below it, it says so.
 export const minimum = { columns: 40, rows: 10 };
-
-// Sample items, until the git status panel is built.
-const gitSamples = { title: "Git status", items: [], empty: "Nothing here yet" };
 
 // The lines of the shortcuts overlay, made from the key table.
 function helpLines() {
@@ -37,6 +38,8 @@ function helpLines() {
 // commands.js. The Files panel shows `cwd`, and commands run there with `env`;
 // command lines are quoted for `platform`. `editor` is the editor's command as
 // words (from VISUAL or EDITOR), and `opener` opens a path in its default app.
+// `runGit` runs git for the Git status panel (src/lib/git.js), and `watch`
+// says whether to follow changes to the files.
 export function createDashboard({
   folder = "",
   commands = [],
@@ -45,13 +48,16 @@ export function createDashboard({
   platform = process.platform,
   editor = editorCommand(env),
   opener = (path) => openWithApp(path, { platform }),
+  runGit = git,
+  watch = true,
 } = {}) {
   // Called when the screen should be drawn again, and to hand the terminal to
   // another program; see connect().
   let redraw = () => {};
   let suspend = async (task) => task(() => {});
 
-  const state = { focus: 0, typing: false, opened: null, help: false, form: null, run: null, runLine: "", preview: null, message: "" };
+  // `next` is what Enter goes on to after a --dry-run preview.
+  const state = { focus: 0, typing: false, help: false, form: null, run: null, runLine: "", next: null, preview: null, message: "" };
   const say = (message) => {
     state.message = message;
     redraw();
@@ -59,34 +65,60 @@ export function createDashboard({
 
   const nameWidth = Math.max(0, ...commands.map((command) => width(command.name)));
   const tree = createTree(cwd, { onChange: () => redraw(), onWarning: (message) => say(`warning: ${message}`) });
-  const panels = [
-    {
-      title: "Commands",
-      // The name, and the description where there's room for some of it. The
-      // filter looks in both.
-      list: createList(commands, {
-        label: (command, room = Infinity) => (room < nameWidth + 12 ? command.name : `${command.name.padEnd(nameWidth)}  ${command.description}`),
-        empty: "No commands",
-      }),
-    },
-    { title: "Files", list: tree.list, files: true },
-    { title: gitSamples.title, list: createList(gitSamples.items, { empty: gitSamples.empty }) },
-  ];
+  const gitStatus = createGitStatus({ cwd, env, run: runGit, onChange: () => redraw(), onWarning: (message) => say(`warning: ${message}`) });
+  const commandsPanel = {
+    title: "Commands",
+    // The name, and the description where there's room for some of it. The
+    // filter looks in both.
+    list: createList(commands, {
+      label: (command, room = Infinity) => (room < nameWidth + 12 ? command.name : `${command.name.padEnd(nameWidth)}  ${command.description}`),
+      empty: "No commands",
+    }),
+  };
+  const filesPanel = { title: "Files", list: tree.list, files: true };
+  const gitPanel = { title: "Git status", list: gitStatus.list, git: true };
+  // The panels shown: Git status only in a git repository, with git installed.
+  const panels = () => (gitStatus.available === false ? [commandsPanel, filesPanel] : [commandsPanel, filesPanel, gitPanel]);
+  const panel = () => panels()[Math.min(state.focus, panels().length - 1)];
   const help = createList(helpLines(), { selectable: false, label: (line) => line.text, style: (line) => (line.bold ? "bold" : undefined) });
 
-  const focused = () => panels[state.focus].list;
+  // The Files panel's sizes and the git status keep up with changes made
+  // outside, in bursts; nothing is watched once the UI ends. In a repository,
+  // the watch is on its top folder, which has the whole working tree and .git
+  // in it, even when the Files panel shows a folder further down.
+  gitStatus.refresh();
+  const watched = findRepository(cwd) ?? cwd;
+  const filesIn = relative(watched, cwd).replaceAll("\\", "/");
+  const watcher = watch
+    ? watchTree(watched, {
+        filesIn: filesIn ? `${filesIn}/` : "",
+        onChange: ({ files, git: gitChanged }) => {
+          if (files) {
+            tree.remeasure();
+          }
+          if (gitChanged) {
+            gitStatus.refresh();
+          }
+        },
+        onError: (err) => say(`warning: changes outside the dashboard won't show (${err.message}); F5 reads the git status again`),
+      })
+    : null;
+
+  const focused = () => panel().list;
   // The list that moving acts on.
   const current = () => (state.help ? help : state.run ? state.run.output : state.preview?.list ?? focused());
   const turn = (step) => {
     state.typing = false;
-    state.focus = (state.focus + step + panels.length) % panels.length;
+    const shown = panels().length;
+    state.focus = (Math.min(state.focus, shown - 1) + step + shown) % shown;
   };
   const context = () => {
     if (state.help) {
       return "help";
     }
     if (state.run) {
-      return state.run.running ? "running" : "output";
+      // After a --dry-run preview that worked, Enter goes on.
+      return state.run.running ? "running" : state.next && state.run.code === 0 ? "dryrun" : "output";
     }
     if (state.form) {
       return "form";
@@ -94,17 +126,15 @@ export function createDashboard({
     if (state.preview) {
       return "preview";
     }
-    if (state.opened) {
-      return "item";
-    }
     if (state.typing) {
       return "filter";
     }
-    return panels[state.focus].files ? "files" : "panels";
+    return panel().files ? "files" : panel().git ? "git" : "panels";
   };
 
   // Runs the form's command, unless something in the form is wrong, or the
-  // command could ask a question that nobody here can answer.
+  // command could ask a question that nobody here can answer (--dry-run asks
+  // nothing).
   function runForm() {
     const { form } = state;
     const [problem, ...more] = form.problems();
@@ -113,15 +143,26 @@ export function createDashboard({
       form.select(problem.field);
       return;
     }
-    if (form.command.asks && !form.saysYes()) {
+    if (form.command.asks && !form.saysYes() && !form.ticked("--dry-run")) {
       form.message = `toolsmith ${form.command.name} can ask questions before it acts, and the dashboard can't answer them. Tick --yes to run it without asking, or run it in a terminal of its own.`;
       return;
     }
     start(form.args());
   }
-  function start(args) {
+  // Runs `toolsmith <args>`; `next` is what Enter goes on to when it's done.
+  function start(args, next = null) {
     state.runLine = `toolsmith ${quoteCommandLine(args, platform)}`;
+    state.next = next;
     state.run = runCommand(args, { cwd, env, onChange: () => redraw() });
+  }
+  // Opens the form of the command `name`, if there's one.
+  function openForm(name, options = {}) {
+    const command = commands.find((candidate) => candidate.name === name);
+    if (command) {
+      state.form = createForm(command, { platform, ...options });
+    } else {
+      say(`toolsmith ${name} isn't available here`);
+    }
   }
 
   // The Files panel's entry that keys act on: the previewed file, or the
@@ -204,18 +245,32 @@ export function createDashboard({
     nextPanel: () => turn(1),
     previousPanel: () => turn(-1),
     open: () => {
-      const item = focused().selected();
-      if (item === undefined) {
-        return;
-      }
-      if (panels[state.focus].title === "Commands") {
-        state.form = createForm(item, { platform });
-      } else {
-        state.opened = { title: panels[state.focus].title, item };
+      const command = commandsPanel.list.selected();
+      if (command) {
+        state.form = createForm(command, { platform });
       }
     },
-    back: () => {
-      state.opened = null;
+    // git lists a new folder as one row, ending in "/", until something in it
+    // is added.
+    showGitFile: () => {
+      const row = gitStatus.list.selected();
+      if (row?.path?.endsWith("/")) {
+        say(`${row.path} is a folder; the Files panel shows what's in it`);
+      } else if (row?.path && gitStatus.top) {
+        preview({ path: join(gitStatus.top, row.path), relativePath: row.path, type: "file" });
+      }
+    },
+    recentCommits: () => start(["git", "recent"]),
+    // A --dry-run preview first; Enter then goes on to the form, where the
+    // usual --yes rule applies.
+    cleanBranches: () => start(["git", "clean-branches", "--dry-run"], () => openForm("git clean-branches")),
+    refreshStatus: () => {
+      gitStatus.refresh();
+    },
+    continueCommand: () => {
+      const { next } = state;
+      actions.closeOutput();
+      next();
     },
     toggleEntry: () => {
       const node = tree.list.selected();
@@ -255,15 +310,10 @@ export function createDashboard({
     sizeReport: () => start(["size", toolFolder()]),
     findDuplicates: () => start(["dupes", toolFolder()]),
     renamePreview: () => {
-      const rename = commands.find((command) => command.name === "rename");
-      if (rename) {
-        // The paths field is split at spaces, as a shell would, so a folder
-        // with a space in its name goes in quotes.
-        const path = /\s/.test(toolFolder()) ? `"${toolFolder()}"` : toolFolder();
-        state.form = createForm(rename, { platform, values: { "[paths...]": path, "--dry-run": true }, locked: ["--dry-run"] });
-      } else {
-        say("The rename command isn't available here");
-      }
+      // The paths field is split at spaces, as a shell would, so a folder with
+      // a space in its name goes in quotes.
+      const path = /\s/.test(toolFolder()) ? `"${toolFolder()}"` : toolFolder();
+      openForm("rename", { values: { "[paths...]": path, "--dry-run": true }, locked: ["--dry-run"] });
     },
     startFilter: () => {
       state.typing = true;
@@ -287,9 +337,13 @@ export function createDashboard({
       state.form = null;
     },
     cancelCommand: () => state.run.cancel(),
+    // The command may have changed the git status; the watcher may not be
+    // there to see it.
     closeOutput: () => {
       state.run.dispose();
       state.run = null;
+      state.next = null;
+      gitStatus.refresh();
     },
     showHelp: () => {
       state.help = true;
@@ -318,14 +372,16 @@ export function createDashboard({
     return action ? actions[action]() : undefined;
   }
 
-  // The three panels side by side, `height` rows. The focused panel's header
-  // and selected row are inverse, so it stands out without colors too; the
-  // other headers are colored, when there are colors.
+  // The panels side by side, `height` rows, sharing the width: three, or two
+  // when Git status is hidden. The focused panel's header and selected row
+  // are inverse, so it stands out without colors too; the other headers are
+  // colored, when there are colors.
   function panelsView(columns, height, paint) {
-    const third = Math.floor((columns - 2) / 3);
-    const widths = [third, third, columns - 2 - 2 * third];
-    const drawn = panels.map(({ title, list }, index) => {
-      const isFocused = index === state.focus;
+    const shown = panels();
+    const share = Math.floor((columns - (shown.length - 1)) / shown.length);
+    const widths = shown.map((_, index) => (index < shown.length - 1 ? share : columns - (shown.length - 1) - share * (shown.length - 1)));
+    const drawn = shown.map(({ title, list }, index) => {
+      const isFocused = shown[index] === panel();
       const typing = isFocused && state.typing;
       // The filter as typed, with a cursor while typing. When the header is too
       // narrow, the filter takes the title's place, and keeps its end in view.
@@ -340,12 +396,6 @@ export function createDashboard({
       return [isFocused ? paint.bar(header) : paint.accent(header), ...list.render(widths[index], height - 1, { focused: isFocused, paint })];
     });
     return Array.from({ length: height }, (_, row) => drawn.map((lines) => lines[row]).join("│"));
-  }
-
-  function itemView(columns, height, paint) {
-    const { title, item } = state.opened;
-    const lines = ["", `  This is where "${item}" will open.`, "  That part of toolsmith ui isn't built yet."];
-    return [paint.bar(pad(` ${title}: ${item}`, columns)), ...Array.from({ length: height - 1 }, (_, row) => pad(lines[row] ?? "", columns))];
   }
 
   // A file's name and size, then its lines, or a note about why they aren't
@@ -406,8 +456,6 @@ export function createDashboard({
       body = state.form.render(columns, height, paint);
     } else if (state.preview) {
       body = previewView(columns, height, paint);
-    } else if (state.opened) {
-      body = itemView(columns, height, paint);
     } else {
       body = panelsView(columns, height, paint);
     }
@@ -425,6 +473,7 @@ export function createDashboard({
     panels,
     state,
     tree,
+    gitStatus,
     // `hooks.redraw` draws the screen again; output arriving and the Files
     // panel use it. `hooks.suspend(task)` hands the terminal to another
     // program while `task` runs; editing a file uses it.
@@ -432,11 +481,13 @@ export function createDashboard({
       redraw = hooks.redraw;
       suspend = hooks.suspend ?? suspend;
     },
-    // Stops a command that's still running, and reading the files, when the
-    // UI ends.
+    // Stops a command that's still running, reading the files and the git
+    // status, and watching them, when the UI ends.
     dispose() {
       state.run?.dispose();
       tree.stop();
+      gitStatus.stop();
+      watcher?.close();
     },
   };
 }

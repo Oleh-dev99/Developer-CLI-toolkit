@@ -3,18 +3,17 @@ import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
 
-// English messages, so checks like "not a git repository" work everywhere.
-const gitEnv = { ...process.env, LC_ALL: "C" };
-
 // Runs git with `args` and returns its output. git is started directly, without
 // a shell, so arguments such as branch names can never run other commands. A
 // failure throws an error with git's message, its `exitCode` and `stderr`.
-// `env` adds environment variables for this one call.
+// `env` adds environment variables for this one call. git's messages are
+// always in English (LC_ALL=C), so checks like "not a git repository" work
+// everywhere.
 export async function git(args, { cwd = process.cwd(), env } = {}) {
   try {
     const { stdout } = await execFileAsync("git", args, {
       cwd,
-      env: { ...gitEnv, ...env },
+      env: { ...process.env, ...env, LC_ALL: "C" },
       maxBuffer: 64 * 1024 * 1024,
     });
     return stdout.trimEnd();

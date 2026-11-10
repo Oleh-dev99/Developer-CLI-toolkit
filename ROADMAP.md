@@ -189,9 +189,9 @@ toolsmith is being built in twelve milestones. M1 is the foundation that every l
 
 ### Git status panel
 
-- [ ] Branch, ahead/behind counts, and staged, unstaged and untracked files (from `git status --porcelain=v2`), refreshed when files change
-- [ ] Shortcuts to the M3 helpers, such as recent commits and cleaning merged branches (with the usual confirmation)
-- [ ] Hidden when the folder isn't a git repository
+- [x] Branch, ahead/behind counts, and staged, unstaged and untracked files (from `git status --porcelain=v2`), refreshed when files change
+- [x] Shortcuts to the M3 helpers, such as recent commits and cleaning merged branches (with the usual confirmation)
+- [x] Hidden when the folder isn't a git repository
 
 ### Tests
 

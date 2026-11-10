@@ -164,8 +164,10 @@ export function createForm(command, { platform = process.platform, values = {}, 
         : [...command.path, ...argumentWords, ...optionWords];
     },
     commandLine: () => `toolsmith ${quoteCommandLine(form.args(), platform)}`,
+    // Whether the checkbox for `flag` (like "--yes") is ticked.
+    ticked: (flag) => fields.some((field) => field.flag === flag && field.checked),
     // Whether --yes is ticked, for a command that can ask.
-    saysYes: () => fields.some((field) => field.flag === "--yes" && field.checked),
+    saysYes: () => form.ticked("--yes"),
 
     // The form in `height` rows: the fields, the selected field's
     // description, the command line, and the message, if there's one. When

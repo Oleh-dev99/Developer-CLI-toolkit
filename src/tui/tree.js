@@ -2,7 +2,7 @@ import { skipFolders } from "../lib/files.js";
 import { formatSize } from "../lib/format.js";
 import { walk } from "../lib/walk.js";
 import { createList } from "./list.js";
-import { spread, width } from "./screen.js";
+import { printable, spread, width } from "./screen.js";
 
 // The Files panel of toolsmith ui: the folder tree under `root`, read with the
 // M2 directory walker and the same folders left out as the file tools (.git
@@ -30,11 +30,14 @@ export function createTree(root, { onChange = () => {}, onWarning = () => {}, ig
       return node.name;
     }
     const marker = node.type === "directory" ? (node.open ? "- " : "+ ") : room < 16 ? "" : "  ";
-    const name = `${"  ".repeat(node.depth)}${marker}${node.name}${node.type === "directory" ? "/" : node.type === "symlink" ? "@" : ""}`;
+    const name = `${"  ".repeat(node.depth)}${marker}${printable(node.name)}${node.type === "directory" ? "/" : node.type === "symlink" ? "@" : ""}`;
     const size = sizeText(node);
     return width(name) + 1 + width(size) <= room ? spread(name, size, room) : name;
   };
-  const list = createList([], { label, empty: "Reading the folder…" });
+  const list = createList([], {
+    label,
+    empty: () => (top.loading || top.children === null ? "Reading the folder…" : top.error ? "This folder can't be read" : "Empty folder"),
+  });
   function sizeText(node) {
     if (node.error) {
       return "can't read";
@@ -102,8 +105,12 @@ export function createTree(root, { onChange = () => {}, onWarning = () => {}, ig
 
   // Adds up every folder's size in one walk, as the size command does: files
   // only, hard links once. The walk goes depth first, in order, so a folder's
-  // size is final as soon as an entry outside it comes up.
+  // size is final as soon as an entry outside it comes up. Sizes from an
+  // earlier walk stay until the new ones replace them, and a newer walk stops
+  // an older one.
+  let measuring = 0;
   async function measure() {
+    const generation = ++measuring;
     const counted = new Set();
     const open = []; // the folders the walk is in, outermost first: [path, size]
     const close = (until) => {
@@ -119,7 +126,7 @@ export function createTree(root, { onChange = () => {}, onWarning = () => {}, ig
     open.push(["", 0]);
     try {
       for await (const entry of walk(root, { ignore, onWarning })) {
-        if (stopped) {
+        if (stopped || generation !== measuring) {
           return;
         }
         const parents = entry.relativePath.split("/").length - 1;
@@ -169,6 +176,8 @@ export function createTree(root, { onChange = () => {}, onWarning = () => {}, ig
         list.move(1);
       }
     },
+    // Adds up the folders' sizes again, after files changed.
+    remeasure: () => measure(),
     // Reads a file's size again, after it was edited.
     update(node, size) {
       node.size = size;

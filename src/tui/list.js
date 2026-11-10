@@ -5,12 +5,16 @@ import { pad } from "./screen.js";
 // view when the list is taller than the panel. It can be filtered, and draws
 // itself, with a message when there's nothing to show.
 //
+// `empty` is the message for no items, or a function that gives it.
+//
 // `items` can be anything: `label(item)` gives the text that's shown and that
 // the filter looks in. When it's shown, `label` also gets the columns there's
-// room for, so that it can leave out what wouldn't fit. A list that isn't `selectable` has no selection, and
-// moving scrolls it instead, as for text to read; `style(item)` can then name
-// a paint function for an item's row, like "bold".
-export function createList(items = [], { label = String, empty = "Nothing here", selectable = true, style = () => undefined } = {}) {
+// room for, so that it can leave out what wouldn't fit. Items count as the
+// same when `key(item)` is (by default, the item itself), for keeping the
+// selection when the items are replaced. A list that isn't `selectable` has no
+// selection, and moving scrolls it instead, as for text to read; `style(item)`
+// can then name a paint function for an item's row, like "bold".
+export function createList(items = [], { label = String, empty = "Nothing here", selectable = true, style = () => undefined, key = (item) => item } = {}) {
   let filter = "";
   let shown = items; // the items that match the filter
   let selected = 0; // index in `shown`
@@ -44,14 +48,15 @@ export function createList(items = [], { label = String, empty = "Nothing here",
       top = 0;
     },
 
-    // Replaces the items, keeping the filter, and the selection when its item
-    // is still there.
+    // Replaces the items, keeping the filter, and the selection: on the same
+    // item when it's still there, or else in the same place.
     setItems(newItems) {
       items = newItems;
       const before = shown[selected];
       const wanted = filter.toLowerCase();
       shown = wanted ? items.filter((item) => label(item).toLowerCase().includes(wanted)) : items;
-      selected = Math.max(0, shown.indexOf(before));
+      const same = before === undefined ? -1 : shown.findIndex((item) => key(item) === key(before));
+      selected = same >= 0 ? same : Math.max(0, Math.min(selected, shown.length - 1));
     },
 
     // Whether the end of the list is in view, as of the last render(): for
@@ -81,7 +86,7 @@ export function createList(items = [], { label = String, empty = "Nothing here",
     render(width, rows, { focused = false, paint = { bar: (text) => text } } = {}) {
       height = Math.max(1, rows);
       if (shown.length === 0) {
-        const message = filter ? `No match for "${filter}"` : empty;
+        const message = filter ? `No match for "${filter}"` : typeof empty === "function" ? empty() : empty;
         return Array.from({ length: rows }, (_, row) => pad(row === 0 ? `  ${message}` : "", width));
       }
       if (selectable) {
