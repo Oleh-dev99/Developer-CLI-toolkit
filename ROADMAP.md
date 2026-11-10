@@ -177,9 +177,9 @@ toolsmith is being built in twelve milestones. M1 is the foundation that every l
 
 ### Command menu
 
-- [ ] Lists every command, including plugin commands, with its description, taken from the commander definitions
-- [ ] Choosing a command opens a form for its arguments and options (defaults, validation) and shows the equivalent command line before running it
-- [ ] Output streams into a scrollable panel, and a running command can be cancelled
+- [x] Lists every command, including plugin commands, with its description, taken from the commander definitions
+- [x] Choosing a command opens a form for its arguments and options (defaults, validation) and shows the equivalent command line before running it
+- [x] Output streams into a scrollable panel, and a running command can be cancelled
 
 ### File browser
 

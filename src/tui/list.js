@@ -6,7 +6,8 @@ import { pad } from "./screen.js";
 // itself, with a message when there's nothing to show.
 //
 // `items` can be anything: `label(item)` gives the text that's shown and that
-// the filter looks in. A list that isn't `selectable` has no selection, and
+// the filter looks in. When it's shown, `label` also gets the columns there's
+// room for, so that it can leave out what wouldn't fit. A list that isn't `selectable` has no selection, and
 // moving scrolls it instead, as for text to read; `style(item)` can then name
 // a paint function for an item's row, like "bold".
 export function createList(items = [], { label = String, empty = "Nothing here", selectable = true, style = () => undefined } = {}) {
@@ -42,6 +43,20 @@ export function createList(items = [], { label = String, empty = "Nothing here",
       selected = Math.max(0, shown.indexOf(before));
       top = 0;
     },
+
+    // Replaces the items, keeping the filter, and the selection when its item
+    // is still there.
+    setItems(newItems) {
+      items = newItems;
+      const before = shown[selected];
+      const wanted = filter.toLowerCase();
+      shown = wanted ? items.filter((item) => label(item).toLowerCase().includes(wanted)) : items;
+      selected = Math.max(0, shown.indexOf(before));
+    },
+
+    // Whether the end of the list is in view, as of the last render(): for
+    // output that should follow new lines only while it's scrolled down.
+    isAtEnd: () => (selectable ? selected >= shown.length - 1 : top >= lastTop()),
 
     move,
     page: (direction) => move(direction * Math.max(1, height - 1)),
@@ -80,12 +95,12 @@ export function createList(items = [], { label = String, empty = "Nothing here",
         }
         const item = shown[index];
         if (!selectable) {
-          const line = pad(label(item), width);
+          const line = pad(label(item, width), width);
           const painter = paint[style(item)];
           return painter ? painter(line) : line;
         }
         const isSelected = index === selected;
-        const line = pad(`${isSelected ? ">" : " "} ${label(item)}`, width);
+        const line = pad(`${isSelected ? ">" : " "} ${label(item, width - 2)}`, width);
         return isSelected && focused ? paint.bar(line) : line;
       });
     },

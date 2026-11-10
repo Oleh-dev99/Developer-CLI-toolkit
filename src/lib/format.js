@@ -19,6 +19,18 @@ export function formatSize(bytes) {
   return `${rounded} ${units[unit]}`;
 }
 
+// 350 → "350 ms", 1234 → "1.2 s", 65000 → "1 min 5 s".
+export function formatDuration(milliseconds) {
+  if (milliseconds < 1000) {
+    return `${Math.round(milliseconds)} ms`;
+  }
+  if (milliseconds < 60_000) {
+    return `${(Math.floor(milliseconds / 100) / 10).toFixed(1)} s`;
+  }
+  const seconds = Math.floor(milliseconds / 1000);
+  return `${Math.floor(seconds / 60)} min ${seconds % 60} s`;
+}
+
 // "500", "500B", "10KB", "1.5 mb" → bytes; null if the text isn't a size.
 export function parseSize(text) {
   const match = /^(\d+(?:\.\d+)?)\s*([KMGT]?B)?$/i.exec(text.trim());

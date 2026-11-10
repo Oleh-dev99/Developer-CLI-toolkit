@@ -156,10 +156,12 @@ export async function helpListing(...words) {
   };
 }
 
-// Creates a temp folder that is deleted when the test `t` finishes.
+// Creates a temp folder that is deleted when the test `t` finishes. On
+// Windows, a process that has just ended can hold on to its folder for a
+// moment, so deleting it is tried a few times.
 export function tempDir(t) {
   const dir = mkdtempSync(join(tmpdir(), "toolsmith-test-"));
-  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  t.after(() => rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 }));
   return dir;
 }
 

@@ -3,7 +3,9 @@ import { readFileSync } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { createProgram } from "../src/cli.js";
 import { createApp } from "../src/tui/app.js";
+import { describeCommands } from "../src/tui/commands.js";
 import { createDashboard, minimum } from "../src/tui/dashboard.js";
 import { box, center, createScreen, pad, paints, rowWidth, spread, terminal, truncate, truncateStart, width } from "../src/tui/screen.js";
 import { fakeTerminal, pressKeys, runCli, screenTerminalEnv, terminalEnv, writeTempConfig } from "./helpers.js";
@@ -141,15 +143,19 @@ test(`below ${minimum.columns}x${minimum.rows} the UI says the terminal is too s
 });
 
 test("every screen uses only the 16 basic colors, never magenta, and none when colors are off", () => {
-  // Each state the dashboard can be in, at a normal size and a too small one.
-  const states = [[], ["nextPanel"], ["startFilter"], ["open"], ["showHelp"]];
+  // Each state the dashboard can be in, at a normal size and a too small one:
+  // the panels, a filter, a command's form and its message (rename needs
+  // values), an opened item, and the overlay. ui-commands.test.js checks a
+  // command's output.
+  const commands = describeCommands(createProgram()).filter((command) => command.name === "rename");
+  const states = [[], ["nextPanel"], ["startFilter"], ["open"], ["open", "runCommand"], ["nextPanel", "open"], ["showHelp"]];
   const parameters = (color) =>
     states.flatMap((actions) =>
       [
         { columns: 60, rows: 15 },
         { columns: 20, rows: 5 },
       ].flatMap((size) => {
-        const view = createDashboard({ folder: "x" });
+        const view = createDashboard({ folder: "x", commands });
         for (const action of actions) {
           view.actions[action]();
         }
@@ -257,16 +263,16 @@ test("toolsmith ui draws its screen, and q restores the terminal: the normal scr
     const { stdout, stderr, code } = await inTerminal(["ui"], {}, key);
     assert.equal(code, 0, stderr);
     assert.ok(stdout.startsWith(terminal.enterAlternateScreen + terminal.hideCursor));
-    assert.match(plain(stdout), / toolsmith ui .* Commands .*> new/s);
+    assert.match(plain(stdout), / toolsmith ui .* Commands .*> config/s);
     assert.ok(stdout.endsWith(`${terminal.showCursor}${terminal.leaveAlternateScreen}<raw off>`), "raw mode went off at the wrong time");
   }
 });
 
 test("toolsmith ui answers keys typed in the terminal", async () => {
-  // Down twice, then quit: the frame before quitting has "dupes" selected.
+  // Down twice, then quit: the last frame has the third command selected.
   const { stdout, code } = await inTerminal(["ui"], {}, "jjq");
   assert.equal(code, 0);
-  assert.match(plain(stdout), /> dupes/);
+  assert.match(plain(stdout), /> git clean-branc/);
 });
 
 test('toolsmith ui has colors only when they\'re on: NO_COLOR, --no-color and "color": false turn them off', async (t) => {

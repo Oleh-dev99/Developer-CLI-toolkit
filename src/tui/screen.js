@@ -54,6 +54,34 @@ export function pad(text, columns) {
   return cut + " ".repeat(Math.max(0, columns - width(cut)));
 }
 
+// `text` broken into lines of at most `columns` columns, at spaces where it
+// can be, and inside words that are longer than a line.
+export function wrap(text, columns) {
+  const lines = [];
+  let line = "";
+  for (const word of text.split(" ")) {
+    let rest = word;
+    while (width(rest) > columns && columns > 0) {
+      if (line) {
+        lines.push(line);
+        line = "";
+      }
+      lines.push([...rest].slice(0, columns).join(""));
+      rest = [...rest].slice(columns).join("");
+    }
+    if (!line) {
+      line = rest;
+    } else if (width(line) + 1 + width(rest) <= columns) {
+      line += ` ${rest}`;
+    } else {
+      lines.push(line);
+      line = rest;
+    }
+  }
+  lines.push(line);
+  return lines;
+}
+
 // `text` in the middle of a row `columns` wide.
 export function center(text, columns) {
   const cut = truncate(text, columns);

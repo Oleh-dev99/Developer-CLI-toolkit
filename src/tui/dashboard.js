@@ -1,21 +1,19 @@
+import { count } from "../lib/format.js";
+import { createForm } from "./form.js";
 import { actionFor, hintsFor, isText, keyOf, sections, shortcutLabel } from "./keys.js";
 import { createList } from "./list.js";
+import { runCommand } from "./runner.js";
 import { box, center, pad, rowWidth, spread, truncateStart, width } from "./screen.js";
 
-// What `toolsmith ui` shows: three panels side by side, an opened item, and the
-// shortcuts overlay (?), and what each key does there.
+// What `toolsmith ui` shows: three panels side by side, a command's form and
+// its output, an opened item, and the shortcuts overlay (?), and what each
+// key does there.
 
 // The smallest terminal the dashboard draws itself in; below it, it says so.
 export const minimum = { columns: 40, rows: 10 };
 
-// Sample items, until the command menu, file browser and git status panel are
-// built.
+// Sample items, until the file browser and git status panel are built.
 const samples = [
-  {
-    title: "Commands",
-    items: ["new", "rename", "dupes", "size", "git clean-branches", "git recent", "git template", "config", "plugins"],
-    empty: "No commands",
-  },
   {
     title: "Files",
     items: Array.from({ length: 24 }, (_, index) => `file${String(index + 1).padStart(2, "0")}.txt`),
@@ -35,19 +33,63 @@ function helpLines() {
   ]);
 }
 
-export function createDashboard({ folder = "" } = {}) {
-  const panels = samples.map(({ title, items, empty }) => ({ title, list: createList(items, { empty }) }));
+// `commands` are the commands to offer, from describeCommands() in
+// commands.js. They run in `cwd` with `env`, and their command lines are
+// quoted for `platform`.
+export function createDashboard({ folder = "", commands = [], cwd = process.cwd(), env = process.env, platform = process.platform } = {}) {
+  const nameWidth = Math.max(0, ...commands.map((command) => width(command.name)));
+  const panels = [
+    {
+      title: "Commands",
+      // The name, and the description where there's room for some of it. The
+      // filter looks in both.
+      list: createList(commands, {
+        label: (command, room = Infinity) => (room < nameWidth + 12 ? command.name : `${command.name.padEnd(nameWidth)}  ${command.description}`),
+        empty: "No commands",
+      }),
+    },
+    ...samples.map(({ title, items, empty }) => ({ title, list: createList(items, { empty }) })),
+  ];
   const help = createList(helpLines(), { selectable: false, label: (line) => line.text, style: (line) => (line.bold ? "bold" : undefined) });
-  const state = { focus: 0, typing: false, opened: null, help: false };
+  // The form being filled in, and the command it started, if any.
+  const state = { focus: 0, typing: false, opened: null, help: false, form: null, run: null, runLine: "" };
+  // Called when the screen should be drawn again, like when output arrives.
+  let redraw = () => {};
 
   const focused = () => panels[state.focus].list;
   // The list that moving acts on.
-  const current = () => (state.help ? help : focused());
+  const current = () => (state.help ? help : state.run ? state.run.output : focused());
   const turn = (step) => {
     state.typing = false;
     state.focus = (state.focus + step + panels.length) % panels.length;
   };
-  const context = () => (state.help ? "help" : state.opened ? "item" : state.typing ? "filter" : "panels");
+  const context = () => {
+    if (state.help) {
+      return "help";
+    }
+    if (state.run) {
+      return state.run.running ? "running" : "output";
+    }
+    return state.form ? "form" : state.opened ? "item" : state.typing ? "filter" : "panels";
+  };
+
+  // Runs the form's command, unless something in the form is wrong, or the
+  // command could ask a question that nobody here can answer.
+  function run() {
+    const { form } = state;
+    const [problem, ...more] = form.problems();
+    if (problem) {
+      form.message = more.length ? `${problem.message} (and ${count(more.length, "more problem")})` : problem.message;
+      form.select(problem.field);
+      return;
+    }
+    if (form.command.asks && !form.saysYes()) {
+      form.message = `toolsmith ${form.command.name} can ask questions before it acts, and the dashboard can't answer them. Tick --yes to run it without asking, or run it in a terminal of its own.`;
+      return;
+    }
+    state.runLine = form.commandLine();
+    state.run = runCommand(form.args(), { cwd, env, onChange: () => redraw() });
+  }
 
   // What each action in the key table does. An action returns "quit" to end
   // the UI.
@@ -62,7 +104,12 @@ export function createDashboard({ folder = "" } = {}) {
     previousPanel: () => turn(-1),
     open: () => {
       const item = focused().selected();
-      if (item !== undefined) {
+      if (item === undefined) {
+        return;
+      }
+      if (panels[state.focus].title === "Commands") {
+        state.form = createForm(item, { platform });
+      } else {
         state.opened = { title: panels[state.focus].title, item };
       }
     },
@@ -81,6 +128,20 @@ export function createDashboard({ folder = "" } = {}) {
       focused().setFilter("");
       state.typing = false;
     },
+    nextField: () => state.form.moveField(1),
+    previousField: () => state.form.moveField(-1),
+    eraseCharacter: () => state.form.erase(),
+    toggleField: () => state.form.toggle(1),
+    previousChoice: () => state.form.toggle(-1),
+    runCommand: run,
+    closeForm: () => {
+      state.form = null;
+    },
+    cancelCommand: () => state.run.cancel(),
+    closeOutput: () => {
+      state.run.dispose();
+      state.run = null;
+    },
     showHelp: () => {
       state.help = true;
       help.first();
@@ -93,11 +154,16 @@ export function createDashboard({ folder = "" } = {}) {
 
   // Handles a readline "keypress" event; returns "quit" to end the UI.
   function key(text, info) {
-    if (context() === "filter" && isText(text, info)) {
+    const where = context();
+    if (where === "filter" && isText(text, info)) {
       focused().setFilter(focused().filter + text);
       return undefined;
     }
-    const action = actionFor(context(), keyOf(text, info));
+    if (where === "form" && state.form.acceptsText() && isText(text, info)) {
+      state.form.type(text);
+      return undefined;
+    }
+    const action = actionFor(where, keyOf(text, info));
     return action ? actions[action]() : undefined;
   }
 
@@ -131,6 +197,12 @@ export function createDashboard({ folder = "" } = {}) {
     return [paint.bar(pad(` ${title}: ${item}`, columns)), ...Array.from({ length: height - 1 }, (_, row) => pad(lines[row] ?? "", columns))];
   }
 
+  // The command line and how the command is doing, then its output.
+  function runView(columns, height, paint) {
+    const header = paint.bar(spread(` $ ${state.runLine}`, ` ${state.run.status()} `, columns));
+    return [header, ...state.run.output.render(columns, height - 1, { paint })];
+  }
+
   // The shortcuts in a box in the middle, scrolling when they don't fit.
   function helpView(columns, height, paint) {
     const boxWidth = Math.min(columns, Math.max(...helpLines().map((line) => width(line.text))) + 4);
@@ -156,9 +228,35 @@ export function createDashboard({ folder = "" } = {}) {
       return tooSmall(size, paint);
     }
     const height = rows - 2;
-    const body = state.help ? helpView(columns, height, paint) : state.opened ? itemView(columns, height, paint) : panelsView(columns, height, paint);
+    let body;
+    if (state.help) {
+      body = helpView(columns, height, paint);
+    } else if (state.run) {
+      body = runView(columns, height, paint);
+    } else if (state.form) {
+      body = state.form.render(columns, height, paint);
+    } else if (state.opened) {
+      body = itemView(columns, height, paint);
+    } else {
+      body = panelsView(columns, height, paint);
+    }
     return [paint.bold(spread(" toolsmith ui", ` ${folder} `, columns)), ...body, paint.bar(pad(` ${hintsFor(context())}`, rowWidth(rows - 1, size)))];
   }
 
-  return { key, render, actions, context, panels };
+  return {
+    key,
+    render,
+    actions,
+    context,
+    panels,
+    state,
+    // `callback` draws the screen again; output arriving uses it.
+    connect(callback) {
+      redraw = callback;
+    },
+    // Stops a command that's still running, when the UI ends.
+    dispose() {
+      state.run?.dispose();
+    },
+  };
 }

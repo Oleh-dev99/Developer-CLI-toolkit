@@ -72,6 +72,14 @@ export async function run(argv) {
   // `toolsmith plugins`. That one lists what happened to each plugin, so it
   // doesn't need the warnings too.
   if (config) {
+    // For toolsmith ui, which lists every command: a program of its own, with
+    // all plugins loaded, as for `toolsmith --help`. Their warnings were
+    // given already, or will be when their commands run.
+    context.allCommands = async () => {
+      const everything = createProgram();
+      await loadPlugins(everything, {}, { enabled: config.settings.plugins, version, packageName, all: true, quiet: true });
+      return everything;
+    };
     const asked = readCommandLine(argv.slice(2));
     context.plugins = await loadPlugins(program, context, {
       enabled: config.settings.plugins,

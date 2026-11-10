@@ -1,6 +1,7 @@
 import { constants } from "node:os";
 import { basename } from "node:path";
 import { emitKeypressEvents } from "node:readline";
+import { describeCommands } from "./commands.js";
 import { createDashboard } from "./dashboard.js";
 import { createScreen, paints, terminal } from "./screen.js";
 
@@ -39,6 +40,17 @@ export function createApp({ input, output, color = false, view = createDashboard
       }
     };
   const render = guarded(() => screen.draw(view.render(size(), paint)));
+  // For things that change on their own, like a command's output: draws at
+  // most about 60 times a second, however fast the output comes.
+  let pending = null;
+  const redraw = () => {
+    pending ??= setTimeout(() => {
+      pending = null;
+      if (running) {
+        render();
+      }
+    }, 16);
+  };
   const onResize = guarded(() => {
     screen.clear();
     render();
@@ -59,6 +71,7 @@ export function createApp({ input, output, color = false, view = createDashboard
     input.on("keypress", onKey);
     output.on("resize", onResize);
     input.resume();
+    view.connect?.(redraw);
     render();
     return done;
   }
@@ -82,6 +95,9 @@ export function createApp({ input, output, color = false, view = createDashboard
       () => output.off("resize", onResize),
       () => input.setRawMode(false),
       () => input.pause(),
+      () => clearTimeout(pending),
+      // A command still running in the view is stopped too.
+      () => view.dispose?.(),
     ];
     for (const step of steps) {
       try {
@@ -100,10 +116,12 @@ export function createApp({ input, output, color = false, view = createDashboard
   return { start, stop, done, rows: () => screen.rows() };
 }
 
-// Runs the UI on this process's terminal until it's closed. The ui command
-// checks first that the input and output are a terminal.
-export async function runUi({ input = process.stdin, output = process.stdout, color = false, folder = basename(process.cwd()) } = {}) {
-  const app = createApp({ input, output, color, view: createDashboard({ folder }) });
+// Runs the UI on this process's terminal until it's closed, offering the
+// commands of `program` (a Commander program, with plugins loaded). The ui
+// command checks first that the input and output are a terminal.
+export async function runUi({ input = process.stdin, output = process.stdout, color = false, folder = basename(process.cwd()), program } = {}) {
+  const commands = program ? describeCommands(program) : [];
+  const app = createApp({ input, output, color, view: createDashboard({ folder, commands }) });
   // While the UI runs, whatever else ends the process restores the terminal
   // first: an error nothing caught (then reported like any other error), a
   // signal, or the process exiting.

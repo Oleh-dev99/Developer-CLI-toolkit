@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import { emitKeypressEvents } from "node:readline";
 import { PassThrough } from "node:stream";
 import { test } from "node:test";
+import { createProgram } from "../src/cli.js";
 import { createApp } from "../src/tui/app.js";
+import { describeCommands } from "../src/tui/commands.js";
 import { createDashboard } from "../src/tui/dashboard.js";
 import { hintsFor, keyOf, sections, shortcutLabel } from "../src/tui/keys.js";
 import { createList } from "../src/tui/list.js";
@@ -31,10 +33,13 @@ const key = {
   ctrlC: "\x03",
 };
 
+// The built-in commands, as the Commands panel lists them.
+const commands = describeCommands(createProgram());
+
 // The UI in a pretend terminal, with keys to press and the screen as text.
 function session(columns = 40, rows = 10) {
   const term = fakeTerminal(columns, rows);
-  const view = createDashboard({ folder: "my-project" });
+  const view = createDashboard({ folder: "my-project", commands });
   const app = createApp({ ...term, view });
   app.start();
   return {
@@ -50,17 +55,17 @@ function session(columns = 40, rows = 10) {
   };
 }
 
-test("scripted key presses at 40x10: panels, End, a filter, an opened item, and back", async () => {
+test("scripted key presses at 40x10: panels, End, a filter, a command's form, and back", async () => {
   const ui = session();
   assert.deepEqual(ui.screen(), [
     " toolsmith ui                my-project ",
     " Commands   │ Files 1/24 │ Git status   ",
-    "> new       │> file01.txt│  Nothing her…",
-    "  rename    │  file02.txt│              ",
-    "  dupes     │  file03.txt│              ",
-    "  size      │  file04.txt│              ",
-    "  git clean…│  file05.txt│              ",
-    "  git recent│  file06.txt│              ",
+    "> config    │> file01.txt│  Nothing her…",
+    "  dupes     │  file02.txt│              ",
+    "  git clean…│  file03.txt│              ",
+    "  git recent│  file04.txt│              ",
+    "  git templ…│  file05.txt│              ",
+    "  git templ…│  file06.txt│              ",
     "  git templ…│  file07.txt│              ",
     " ?: shortcuts  q: quit  /: filter  Ent…",
   ]);
@@ -69,12 +74,12 @@ test("scripted key presses at 40x10: panels, End, a filter, an opened item, and 
   await ui.press(key.tab, key.end);
   assert.deepEqual(ui.screen().slice(1, 9), [
     " Commands   │ Files      │ Git status   ",
-    "> new       │  file18.txt│  Nothing her…",
-    "  rename    │  file19.txt│              ",
-    "  dupes     │  file20.txt│              ",
-    "  size      │  file21.txt│              ",
-    "  git clean…│  file22.txt│              ",
-    "  git recent│  file23.txt│              ",
+    "> config    │  file18.txt│  Nothing her…",
+    "  dupes     │  file19.txt│              ",
+    "  git clean…│  file20.txt│              ",
+    "  git recent│  file21.txt│              ",
+    "  git templ…│  file22.txt│              ",
+    "  git templ…│  file23.txt│              ",
     "  git templ…│> file24.txt│              ",
   ]);
 
@@ -83,39 +88,39 @@ test("scripted key presses at 40x10: panels, End, a filter, an opened item, and 
   await ui.press(key.shiftTab, "/", "g", "i", "t");
   assert.deepEqual(ui.screen(), [
     " toolsmith ui                my-project ",
-    " /git_  1/3 │ Files      │ Git status   ",
+    " /git_  1/6 │ Files      │ Git status   ",
     "> git clean…│  file18.txt│  Nothing her…",
     "  git recent│  file19.txt│              ",
     "  git templ…│  file20.txt│              ",
-    "            │  file21.txt│              ",
-    "            │  file22.txt│              ",
-    "            │  file23.txt│              ",
+    "  git templ…│  file21.txt│              ",
+    "  git templ…│  file22.txt│              ",
+    "  git templ…│  file23.txt│              ",
     "            │> file24.txt│              ",
     " Enter: done  Esc: clear  Backspace: d…",
   ]);
 
-  // Enter keeps the filter, Down and Enter open the second match.
+  // Enter keeps the filter; Down and Enter open the second match's form.
   await ui.press(key.enter, key.down, key.enter);
   assert.deepEqual(ui.screen(), [
     " toolsmith ui                my-project ",
-    " Commands: git recent                   ",
+    " toolsmith git recent  summarize recent…",
+    "> --since <date>   _                    ",
+    "  --until <date>                        ",
+    "  --from <ref>                          ",
+    "  --author <name>                       ",
     "                                        ",
-    '  This is where "git recent" will open. ',
-    "  That part of toolsmith ui isn't built…",
-    "                                        ",
-    "                                        ",
-    "                                        ",
-    "                                        ",
-    " Esc: back  ?: shortcuts  q: quit      ",
+    ' only commits after this, like "1 week …',
+    " $ toolsmith git recent                 ",
+    " Enter: run  Esc: back  Space: tick  D…",
   ]);
 
   // Esc goes back, with the filter still on; Esc again clears it.
   await ui.press(key.escape);
-  assert.equal(ui.screen()[1], " /git   2/3 │ Files      │ Git status   ");
+  assert.equal(ui.screen()[1], " /git   2/6 │ Files      │ Git status   ");
   await ui.press(key.escape);
   assert.equal(ui.screen()[1], " Commands   │ Files      │ Git status   ");
-  // The selection stays on the item that was opened.
-  assert.equal(ui.screen()[7], "> git recent│  file23.txt│              ");
+  // The selection stays on the command that was opened.
+  assert.equal(ui.screen()[5], "> git recent│  file21.txt│              ");
   await ui.end();
 });
 
@@ -131,13 +136,13 @@ test("the shortcuts overlay lists the key table, scrolls, and closes with Esc or
     "│   PgUp                move up a page │",
     "│   PgDn                move down a p… │",
     "│   Home                go to the fir… │",
-    "└ 1-6/38 ──────────────────────────────┘",
+    "└ 1-6/69 ──────────────────────────────┘",
     " Esc: close  Down: scroll              ",
   ]);
   await ui.press("j", key.down);
-  assert.match(ui.screen()[8], /^└ 3-8\/38 /);
-  await ui.press(key.pageDown, key.pageDown, key.pageDown, key.pageDown, key.pageDown, key.pageDown, key.pageDown);
-  assert.match(ui.screen()[8], /^└ 33-38\/38 /);
+  assert.match(ui.screen()[8], /^└ 3-8\/69 /);
+  await ui.press(...Array.from({ length: 15 }, () => key.pageDown));
+  assert.match(ui.screen()[8], /^└ 64-69\/69 /);
   await ui.press(key.escape);
   assert.match(ui.screen()[1], /Commands/);
   await ui.press("?", "?");
@@ -146,7 +151,7 @@ test("the shortcuts overlay lists the key table, scrolls, and closes with Esc or
 });
 
 test("every shortcut in the key table is in the overlay, and the hints at the bottom come from it", async () => {
-  const ui = session(100, 60);
+  const ui = session(120, 80);
   await ui.press("?");
   const overlay = ui.screen().join("\n");
   for (const shortcut of sections.flatMap((section) => section.shortcuts)) {
@@ -155,13 +160,16 @@ test("every shortcut in the key table is in the overlay, and the hints at the bo
   for (const section of sections) {
     assert.match(overlay, new RegExp(`│ ${escape(section.title)} +│`));
   }
-  assert.equal(ui.screen()[59].trim(), hintsFor("help"));
+  const footer = () => ui.screen()[79].trim();
+  assert.equal(footer(), hintsFor("help"));
   await ui.press(key.escape);
-  assert.equal(ui.screen()[59].trim(), hintsFor("panels"));
+  assert.equal(footer(), hintsFor("panels"));
   await ui.press("/");
-  assert.equal(ui.screen()[59].trim(), hintsFor("filter"));
-  await ui.press(key.enter, key.enter);
-  assert.equal(ui.screen()[59].trim(), hintsFor("item"));
+  assert.equal(footer(), hintsFor("filter"));
+  await ui.press(key.escape, key.enter);
+  assert.equal(footer(), hintsFor("form"));
+  await ui.press(key.escape, key.tab, key.enter);
+  assert.equal(footer(), hintsFor("item"));
   await ui.end();
 });
 
@@ -187,12 +195,14 @@ test("the key table and the handlers can't drift apart", () => {
     }
   }
   // Every context the dashboard can be in has its shortcuts.
-  assert.deepEqual(sections.map((section) => section.context).sort(), ["filter", "help", "item", "panels"]);
-  // Ctrl+C quits everywhere, and q everywhere but while typing a filter.
+  assert.deepEqual(sections.map((section) => section.context).sort(), ["filter", "form", "help", "item", "output", "panels", "running"]);
+  // Ctrl+C cancels a running command, and quits everywhere else. q quits too,
+  // except where it's typed, and while a command runs.
   for (const section of sections) {
-    const quit = section.shortcuts.find((shortcut) => shortcut.action === "quit");
-    assert.ok(quit?.keys.includes("ctrl+c"), section.context);
-    assert.equal(quit.keys.includes("q"), section.context !== "filter", section.context);
+    const ctrlC = section.shortcuts.find((shortcut) => shortcut.keys.includes("ctrl+c"));
+    assert.equal(ctrlC?.action, section.context === "running" ? "cancelCommand" : "quit", section.context);
+    const q = section.shortcuts.find((shortcut) => shortcut.keys.includes("q"));
+    assert.equal(q?.action, ["filter", "form", "running"].includes(section.context) ? undefined : "quit", section.context);
   }
 });
 
@@ -259,9 +269,9 @@ test("arrow keys and h, j, k, l move, and the panels wrap around", async () => {
   const ui = session();
   const selected = () => ui.screen().find((row) => row.startsWith(">"));
   await ui.press("j", "j", key.down);
-  assert.match(selected(), /^> size/);
+  assert.match(selected(), /^> git recent/);
   await ui.press("k", key.up);
-  assert.match(selected(), /^> rename/);
+  assert.match(selected(), /^> dupes/);
 
   const focusedTitle = () => {
     const header = ui.raw()[1].split("│");
@@ -307,7 +317,7 @@ test("the focused panel stands out without colors: an inverse header and selecti
   );
   const cells = firstRow.split("│");
   assert.ok(cells[1].startsWith("\x1b[7m> file01.txt"));
-  assert.ok(cells[0].startsWith("> new") && !cells[0].includes("\x1b[7m"));
+  assert.ok(cells[0].startsWith("> config") && !cells[0].includes("\x1b[7m"));
   await ui.end();
 });
 
@@ -319,18 +329,18 @@ test("/ filters as you type: any case, Backspace edits, Esc clears, and keys lik
   assert.match(ui.screen()[2], /^> git recent/);
   // Backspace widens the filter again; the selection stays on "git recent".
   await ui.press(key.backspace, key.backspace);
-  assert.match(ui.screen()[1], /^ Commands \/GIT_ +2\/3 │/);
+  assert.match(ui.screen()[1], /^ Commands \/GIT_ +2\/6 │/);
   // q and ? are typed, not quit or help.
   await ui.press("q", "?");
   assert.match(ui.screen()[1], /^ Commands \/GITq\?_ /);
   assert.match(ui.screen()[2], /No match for "GITq\?"/);
   await ui.press(key.escape);
-  assert.match(ui.screen()[1], /^ Commands +1\/9 │/);
+  assert.match(ui.screen()[1], new RegExp(`^ Commands +1/${commands.length} │`));
   assert.match(ui.screen()[11], /^ \?: shortcuts/);
 
   // Tab while typing keeps the filter on the list it was typed for.
-  await ui.press("/", "s", "i", key.tab);
-  assert.match(ui.screen()[1], /^ Commands \/si +1\/1 │ Files/);
+  await ui.press("/", "s", "i", "z", key.tab);
+  assert.match(ui.screen()[1], /^ Commands \/siz +1\/1 │ Files/);
   assert.match(ui.screen()[2], /^> size/);
   await ui.end();
 });
@@ -345,8 +355,8 @@ test("an empty panel says so, and Enter there opens nothing", async () => {
   await ui.end();
 });
 
-test("Ctrl+C quits from everywhere, and q from everywhere but the filter", async () => {
-  const setups = { panels: [], filter: ["/"], item: [key.enter], help: ["?"] };
+test("Ctrl+C quits from the panels, a filter, a form, an item and the overlay, and q where it isn't typed", async () => {
+  const setups = { panels: [], filter: ["/"], form: [key.enter], item: [key.tab, key.enter], help: ["?"] };
   for (const [context, keys] of Object.entries(setups)) {
     for (const quit of [key.ctrlC, "q"]) {
       const ui = session();
@@ -354,7 +364,7 @@ test("Ctrl+C quits from everywhere, and q from everywhere but the filter", async
       assert.equal(ui.view.context(), context);
       await ui.press(quit);
       const ended = await Promise.race([ui.app.done.then(() => true), new Promise((resolve) => setTimeout(() => resolve(false), 50))]);
-      assert.equal(ended, quit === key.ctrlC || context !== "filter", `${JSON.stringify(quit)} in ${context}`);
+      assert.equal(ended, quit === key.ctrlC || !["filter", "form"].includes(context), `${JSON.stringify(quit)} in ${context}`);
       await ui.end();
     }
   }

@@ -83,20 +83,26 @@ toolsmith git template unset              # stop using it
 
 ### Dashboard
 
-`toolsmith ui` opens a full-screen dashboard in the terminal, with three panels: commands, files and git status. It's at an early stage: you can move around, filter and open items, but the panels hold sample items for now, while the command menu, file browser and git status panel are being built (see M7 in the [roadmap](ROADMAP.md)).
+`toolsmith ui` opens a full-screen dashboard in the terminal, with three panels: commands, files and git status. The Files and Git status panels hold sample items for now, while the file browser and git status panel are being built (see M7 in the [roadmap](ROADMAP.md)).
 
 ```sh
 toolsmith ui            # ? shows every shortcut, q quits
 ```
 
+The Commands panel lists every command and subcommand, plugin commands included, with their descriptions from `--help`. Enter opens a form with a field for each argument and option: type into text fields, tick checkboxes and pick choices with Space, and see the defaults. Below the form is the command line it adds up to, quoted for PowerShell on Windows and for sh elsewhere, so you can copy it. Enter runs it, after checking the values the way the command does, with its own messages (like "Use a whole number of 1 or more." for `size --top`).
+
+The command runs as a separate toolsmith process, without a shell, and its output streams into a panel that you can scroll; lines from stderr are bold rather than colored. Esc or Ctrl+C cancels it, along with any programs it started, and the panel shows the exit code and how long it ran. Commands that can ask questions, like `new` and `git clean-branches`, only run when `--yes` is ticked in their form, because the dashboard can't answer them; otherwise the form says so, and you can run them in a terminal of their own.
+
 | Keys | What they do |
 |---|---|
-| Up and Down, or `k` and `j`; PgUp, PgDn, Home, End | Move in the list |
+| Up and Down, or `k` and `j`; PgUp, PgDn, Home, End | Move in the list, or scroll the output |
 | Tab and Shift+Tab, Left and Right, or `h` and `l` | Switch panels |
 | Enter, Esc | Open the selected item, go back |
 | `/` | Filter the list as you type, in any case; Backspace edits, Enter keeps the filter, Esc clears it |
+| In a form: Tab, Up, Down, Space, Enter | Go to the next or previous field, tick or choose, run the command |
+| While a command runs: Esc or Ctrl+C | Cancel it |
 | `?` | Show every shortcut; Esc or `?` closes the list |
-| `q` or Ctrl+C | Quit (while filtering, `q` is typed, and Ctrl+C quits) |
+| `q` or Ctrl+C | Quit (in a filter or a form, `q` is typed and Ctrl+C quits) |
 
 The keys work the same in Windows Terminal, the classic Windows console, macOS Terminal and Linux terminals, whichever codes they send, with one exception: with Node.js 22, the classic Windows console sends Shift+Tab as a plain Tab, so use Left or `h` to go to the previous panel there.
 
