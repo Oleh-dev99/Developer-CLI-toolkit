@@ -97,6 +97,15 @@ toolsmith rename IMG_ photo_
 
 All three skip `.git` and `node_modules`. `dupes` and `rename` also take files, folders or quoted patterns like `'*.jpg'`; see [dupes](./commands.md#toolsmith-dupes) and [rename](./commands.md#toolsmith-rename) in the command reference for the details.
 
+## Check a project
+
+```sh
+toolsmith doctor
+toolsmith doctor --fail-on warning --markdown
+```
+
+`doctor` checks the project you're in, like whether its LICENSE file has the license that `package.json` names, and reports the problems by severity, each with a fix. It exits with code 1 when there's an error, so it fits in CI, where `--markdown` makes a report for a pull request. See [Project health](./doctor.md) for its checks and settings.
+
 ## Add plugins
 
 A plugin is an npm package named `toolsmith-plugin-<something>` that adds commands to toolsmith. Install it like any other package, for one project or for all of them, and `toolsmith plugins` shows what it found:
@@ -114,4 +123,5 @@ A plugin is a program that runs with your full user permissions: it can read and
 
 - [Command reference](./commands.md): every command, with its arguments and options.
 - [Configuration](./configuration.md): every setting in `~/.toolsmithrc`.
+- [Project health](./doctor.md): what `toolsmith doctor` checks, and its settings in `toolsmith.json`.
 - [Writing plugins](./plugins.md): add your own commands.

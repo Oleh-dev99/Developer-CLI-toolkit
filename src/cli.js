@@ -2,6 +2,7 @@ import { createRequire } from "node:module";
 import { inspect } from "node:util";
 import { Command } from "commander";
 import * as configCommand from "./commands/config.js";
+import * as doctorCommand from "./commands/doctor.js";
 import * as dupesCommand from "./commands/dupes.js";
 import * as gitCommand from "./commands/git/index.js";
 import * as helloCommand from "./commands/hello.js";
@@ -19,6 +20,7 @@ const { name: packageName, version } = createRequire(import.meta.url)("../packag
 // Each command module exports register(program, context).
 const commands = [
   configCommand,
+  doctorCommand,
   dupesCommand,
   gitCommand,
   helloCommand,

@@ -127,6 +127,45 @@ The keys work the same in Windows Terminal, the classic Windows console, macOS T
 
 It needs a terminal of at least 40×10, and says so in a smaller one until the window is made bigger. Because it needs a terminal for both its input and its output, it refuses to start in scripts, in CI and with its input or output redirected; use the plain commands there. Its colors follow `--no-color`, `NO_COLOR` and the `"color"` setting, and it uses only the 16 basic colors, with inverse bars that stay readable without any. Whatever ends it, including Ctrl+C and errors, the terminal is put back as it was. Rows line up with wide characters too: Chinese, Japanese and Korean characters and emoji take the two columns terminals give them.
 
+### Project health
+
+`toolsmith doctor` checks the project you're in and reports what it finds, the most severe first, each finding with where it is and how to fix it:
+
+```sh
+toolsmith doctor                                # the project around the current folder
+toolsmith doctor --list                         # the checks
+toolsmith doctor --only license --json          # one check, as JSON for a script
+toolsmith doctor --fail-on warning --markdown   # in CI, with a report for the pull request
+```
+
+```text
+$ toolsmith doctor
+Errors
+
+  license
+    package.json:4: "license" in package.json is MIT, but LICENSE has the ISC license text
+      Fix: Make them agree: set "license" to "ISC", or put the MIT license text in LICENSE.
+
+Checked the current folder with 1 check: license.
+1 error, 0 warnings, 0 info
+```
+
+Findings are grouped by severity (error, warning, info), then by check, and the report ends with a summary. `--json` prints it for scripts and `--markdown` for a pull request comment. The first check, `license`, makes sure the project has a LICENSE file with the license that `"license"` in `package.json` names. It tells MIT, ISC, Apache-2.0, the BSD and GNU licenses and a few more apart by their text, and a text it doesn't know is a warning, not a guess.
+
+The project is the nearest folder, from the current one up, with a `toolsmith.json`, or else a `package.json`. The `"doctor"` section of its `toolsmith.json` can ignore findings (of a whole check, or of a check in a file or on one line), change the severity of a check's findings, and set how many seconds each check may take:
+
+```json
+{
+  "doctor": {
+    "ignore": [{ "check": "license", "file": "COPYING.md" }],
+    "severity": { "license": "warning" },
+    "timeout": 60
+  }
+}
+```
+
+The checks run at the same time, each with a time limit (30 seconds unless you say otherwise). One that crashes or runs out of time is an error of its own, and the others still run. A check that needs the network is skipped with a warning when there's no connection, and with `--offline`. The exit code is 0 when no finding is as severe as `--fail-on` (an error, by default), and 1 when one is, or when doctor can't run, like for an unknown check or a `toolsmith.json` that isn't valid. The [project health page](https://oleh-dev99.github.io/Developer-CLI-toolkit/doctor.html) has the details.
+
 ## Plugins
 
 Plugins add commands to toolsmith. A plugin is an npm package named `toolsmith-plugin-<something>` or `@scope/toolsmith-plugin-<something>`, and toolsmith finds it where npm installs it, in the current project (`node_modules` here or in a folder above) or globally:

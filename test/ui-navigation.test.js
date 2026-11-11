@@ -79,28 +79,28 @@ test("scripted key presses at 40x10: panels, End, a filter, a command's form, an
   // Outside a git repository, the two panels share the width.
   assert.deepEqual(ui.screen(), [
     " toolsmith ui                my-project ",
-    " Commands     1/15 │ Files         1/24 ",
+    " Commands     1/16 │ Files         1/24 ",
     "> config           │>   file01.txt   1 B",
-    "  dupes            │    file02.txt   2 B",
-    "  git clean-branch…│    file03.txt   3 B",
-    "  git recent       │    file04.txt   4 B",
-    "  git template list│    file05.txt   5 B",
-    "  git template show│    file06.txt   6 B",
-    "  git template use │    file07.txt   7 B",
+    "  doctor           │    file02.txt   2 B",
+    "  dupes            │    file03.txt   3 B",
+    "  git clean-branch…│    file04.txt   4 B",
+    "  git recent       │    file05.txt   5 B",
+    "  git template list│    file06.txt   6 B",
+    "  git template show│    file07.txt   7 B",
     " ?: shortcuts  q: quit  /: filter  Ent…",
   ]);
 
   // Tab to Files, End: the list scrolls to keep the last file in view.
   await ui.press(key.tab, key.end);
   assert.deepEqual(ui.screen().slice(1, 9), [
-    " Commands     1/15 │ Files        24/24 ",
+    " Commands     1/16 │ Files        24/24 ",
     "> config           │    file18.txt  18 B",
-    "  dupes            │    file19.txt  19 B",
-    "  git clean-branch…│    file20.txt  20 B",
-    "  git recent       │    file21.txt  21 B",
-    "  git template list│    file22.txt  22 B",
-    "  git template show│    file23.txt  23 B",
-    "  git template use │>   file24.txt  24 B",
+    "  doctor           │    file19.txt  19 B",
+    "  dupes            │    file20.txt  20 B",
+    "  git clean-branch…│    file21.txt  21 B",
+    "  git recent       │    file22.txt  22 B",
+    "  git template list│    file23.txt  23 B",
+    "  git template show│>   file24.txt  24 B",
   ]);
 
   // Back to Commands, and filter it.
@@ -137,9 +137,9 @@ test("scripted key presses at 40x10: panels, End, a filter, a command's form, an
   await ui.press(key.escape);
   assert.equal(ui.screen()[1], " Commands /git 2/6 │ Files        24/24 ");
   await ui.press(key.escape);
-  assert.equal(ui.screen()[1], " Commands     4/15 │ Files        24/24 ");
+  assert.equal(ui.screen()[1], " Commands     5/16 │ Files        24/24 ");
   // The selection stays on the command that was opened.
-  assert.equal(ui.screen()[5], "> git recent       │    file21.txt  21 B");
+  assert.equal(ui.screen()[6], "> git recent       │    file22.txt  22 B");
   await ui.end();
 });
 
@@ -311,9 +311,9 @@ test("arrow keys and h, j, k, l move, and the panels wrap around", async (t) => 
   const ui = await session(t);
   const selected = () => ui.screen().find((row) => row.startsWith(">"));
   await ui.press("j", "j", key.down);
-  assert.match(selected(), /^> git recent/);
+  assert.match(selected(), /^> git clean-branch/);
   await ui.press("k", key.up);
-  assert.match(selected(), /^> dupes/);
+  assert.match(selected(), /^> doctor/);
 
   const focusedTitle = () => {
     const header = ui.raw()[1].split("│");

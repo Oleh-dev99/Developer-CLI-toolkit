@@ -30,24 +30,9 @@ export function loadConfig() {
     ? resolve(process.env.TOOLSMITH_CONFIG)
     : join(homedir(), ".toolsmithrc");
 
-  let buffer;
-  try {
-    buffer = readFileSync(path);
-  } catch (err) {
-    if (err.code === "ENOENT") {
-      return { path, found: false, settings: { ...defaults }, warnings: [] };
-    }
-    throw new Error(`can't read config file ${path}: ${err.message}`);
-  }
-
-  let data;
-  try {
-    data = JSON.parse(decode(buffer));
-  } catch (err) {
-    throw new Error(`config file ${path} is not valid JSON: ${err.message}`);
-  }
-  if (typeof data !== "object" || data === null || Array.isArray(data)) {
-    throw new Error(`config file ${path} must contain a JSON object`);
+  const data = readJsonObject(path);
+  if (data === null) {
+    return { path, found: false, settings: { ...defaults }, warnings: [] };
   }
 
   const settings = { ...defaults };
@@ -62,6 +47,32 @@ export function loadConfig() {
     }
   }
   return { path, found: true, settings, warnings };
+}
+
+// Reads the config file at `path`, which must hold a JSON object, and returns
+// that object, or null when there's no such file. The errors name the file.
+// Also for a project's toolsmith.json (see src/doctor/config.js).
+export function readJsonObject(path) {
+  let buffer;
+  try {
+    buffer = readFileSync(path);
+  } catch (err) {
+    if (err.code === "ENOENT") {
+      return null;
+    }
+    throw new Error(`can't read config file ${path}: ${err.message}`);
+  }
+
+  let data;
+  try {
+    data = JSON.parse(decode(buffer));
+  } catch (err) {
+    throw new Error(`config file ${path} is not valid JSON: ${err.message}`);
+  }
+  if (typeof data !== "object" || data === null || Array.isArray(data)) {
+    throw new Error(`config file ${path} must contain a JSON object`);
+  }
+  return data;
 }
 
 // Whether `value` is of `kind`, one of the words in `kinds`.

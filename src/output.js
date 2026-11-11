@@ -12,8 +12,9 @@ export function disableColor() {
 
 // styleText checks the stream: no colors when it isn't a terminal or NO_COLOR
 // is set, unless FORCE_COLOR is set. Keep to single formats like "green" —
-// on Node 22.12, an array of formats skips these checks.
-function paint(format, text, stream) {
+// on Node 22.12, an array of formats skips these checks. Also for reports
+// that color parts of their lines, like toolsmith doctor's.
+export function paint(format, text, stream = process.stdout) {
   return colorEnabled ? styleText(format, text, { stream }) : text;
 }
 

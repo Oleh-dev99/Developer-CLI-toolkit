@@ -1,21 +1,21 @@
 {bold} toolsmith ui                                                        my-project {/bold}
- Commands            1/15 │ Files                1/5 │{inverse} Git status          2/11 {/inverse}
+ Commands            1/16 │ Files                1/5 │{inverse} Git status          2/11 {/inverse}
 > config                  │>   README.md         ## B│  main
-  dupes                   │  + docs/            ### B│{inverse}> no upstream             {/inverse}
-  git clean-branches      │  + src/            #.# KB│
-  git recent              │    todo.txt           # B│  Staged (1)
-  git template list       │    日本語.txt        ## B│  A  src/new.js
-  git template show       │                          │
-  git template use        │                          │  Not staged (1)
-  git template unset      │                          │  M  src/app.js
-  hello                   │                          │
-  new                     │                          │  Untracked (1)
-  plugins                 │                          │  ?  todo.txt
+  doctor                  │  + docs/            ### B│{inverse}> no upstream             {/inverse}
+  dupes                   │  + src/            #.# KB│
+  git clean-branches      │    todo.txt           # B│  Staged (1)
+  git recent              │    日本語.txt        ## B│  A  src/new.js
+  git template list       │                          │
+  git template show       │                          │  Not staged (1)
+  git template use        │                          │  M  src/app.js
+  git template unset      │                          │
+  hello                   │                          │  Untracked (1)
+  new                     │                          │  ?  todo.txt
+  plugins                 │                          │
   plugins enable          │                          │
   plugins disable         │                          │
   rename                  │                          │
   size                    │                          │
-                          │                          │
                           │                          │
                           │                          │
                           │                          │

@@ -21,6 +21,7 @@ toolsmith [options] [command]
 | Command | Description |
 |---|---|
 | [`config`](#toolsmith-config) | show the config file in use and the effective settings |
+| [`doctor [options]`](#toolsmith-doctor) | check the project for problems, and report them by severity |
 | [`dupes [options] [paths...]`](#toolsmith-dupes) | find files with identical content (report only, nothing is deleted) |
 | [`git`](#toolsmith-git) | git helpers: clean up merged branches, summarize commits, commit message templates |
 | [`hello [name]`](#toolsmith-hello) | print a friendly greeting |
@@ -45,6 +46,52 @@ TOOLSMITH_CONFIG environment variable. The file is JSON, for example:
 
 Example:
   $ toolsmith config
+```
+
+## toolsmith doctor
+
+Check the project for problems, and report them by severity.
+
+```text
+toolsmith doctor [options]
+```
+
+| Option | Description |
+|---|---|
+| `--only <checks>` | run only these checks (names, separated by commas) |
+| `--skip <checks>` | don't run these checks |
+| `--list` | show the checks |
+| `--fail-on <severity>` | exit with code 1 for findings this severe or more (choices: "error", "warning", "info", default: "error") |
+| `--timeout <seconds>` | how long each check may take (default: 30, or "timeout" in toolsmith.json) |
+| `--offline` | skip the checks that need the network |
+| `--json` | print the report as JSON |
+| `--markdown` | print the report as Markdown, like for a pull request comment |
+
+```text
+Examples:
+  Check the project you're in:
+  $ toolsmith doctor
+
+  Only the license check, as JSON for a script:
+  $ toolsmith doctor --only license --json
+
+  In CI, failing on warnings too, with a report for the pull request:
+  $ toolsmith doctor --fail-on warning --markdown > doctor.md
+
+The project is the nearest folder, from the current one up, that has a
+toolsmith.json, or else a package.json. The "doctor" section of its
+toolsmith.json can ignore findings (of a check, or of a check in a file),
+change the severity of a check's findings, and set the timeout.
+toolsmith doctor --list shows the checks.
+
+The checks run at the same time, each for at most 30 seconds unless you say
+otherwise. A check that crashes or runs out of time is an error of its own,
+and the other checks still run. A check that needs the network is skipped,
+with a warning, when there's no connection, and with --offline.
+
+Exit codes: 0 when no finding is as severe as --fail-on (an error, unless you
+choose warning or info), and 1 when one is, or when doctor can't run, like
+for an unknown check or a toolsmith.json that isn't valid.
 ```
 
 ## toolsmith dupes

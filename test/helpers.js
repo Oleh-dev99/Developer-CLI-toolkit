@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { EventEmitter } from "node:events";
 import { chmodSync, existsSync, linkSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, watch, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, delimiter, dirname, join } from "node:path";
+import { basename, delimiter, dirname, join, relative, resolve, sep } from "node:path";
 import { PassThrough, Writable } from "node:stream";
 import { fileURLToPath } from "node:url";
 
@@ -237,6 +237,30 @@ export function runCli(args, { env = {}, cwd, input, script = bin } = {}) {
     child.on("error", reject);
     child.on("close", (code) => resolve({ stdout, stderr, code }));
   });
+}
+
+// The relative files that `file` imports statically (import ... from, or
+// export ... from), as absolute paths. import() isn't static, so it's left out.
+function staticImports(file) {
+  const text = readFileSync(file, "utf8");
+  const patterns = [/^\s*import\s+(?:[\w*{}\s,$]+\s+from\s+)?["'](\.[^"']+)["']/gm, /^\s*export\s+(?:\*|\{[^}]*\})\s+from\s+["'](\.[^"']+)["']/gm];
+  return patterns.flatMap((pattern) => Array.from(text.matchAll(pattern), ([, path]) => resolve(dirname(file), path)));
+}
+
+// toolsmith's own files that load whenever it starts, whatever the command:
+// those that bin/toolsmith.js imports statically, and so on. Paths are
+// relative to the repository, with "/".
+export function loadedAtStart() {
+  const root = fileURLToPath(new URL("..", import.meta.url));
+  const reached = new Set();
+  const visit = (file) => {
+    if (!reached.has(file)) {
+      reached.add(file);
+      staticImports(file).forEach(visit);
+    }
+  };
+  visit(join(root, "bin", "toolsmith.js"));
+  return [...reached].map((file) => relative(root, file).split(sep).join("/"));
 }
 
 // What `toolsmith <words> --help` lists: its commands' names (with "help"),

@@ -204,10 +204,10 @@ toolsmith is being built in twelve milestones. M1 is the foundation that every l
 
 ### Check framework
 
-- [ ] Each check is a module that returns findings with a severity (`error`, `warning` or `info`), a location and a suggested fix
-- [ ] Checks run in parallel, each with a timeout; a check that crashes is reported and the others still run
-- [ ] `--only` and `--skip` choose checks; a `doctor` section in the project's `toolsmith.json` (found by walking up from the current folder) holds ignore rules and severity overrides
-- [ ] Checks that need the network are skipped with a warning when offline, instead of failing the run
+- [x] Each check is a module that returns findings with a severity (`error`, `warning` or `info`), a location and a suggested fix
+- [x] Checks run in parallel, each with a timeout; a check that crashes is reported and the others still run
+- [x] `--only` and `--skip` choose checks; a `doctor` section in the project's `toolsmith.json` (found by walking up from the current folder) holds ignore rules and severity overrides
+- [x] Checks that need the network are skipped with a warning when offline, instead of failing the run
 
 ### Dependencies
 
@@ -220,7 +220,7 @@ toolsmith is being built in twelve milestones. M1 is the foundation that every l
 
 - [ ] Find the license of every installed dependency in its `package.json`, falling back to its LICENSE file
 - [ ] Allow and deny lists in `toolsmith.json` (e.g. warn on GPL-family licenses, error on missing or unknown ones)
-- [ ] Check the project itself: a LICENSE file exists and matches `license` in `package.json`
+- [x] Check the project itself: a LICENSE file exists and matches `license` in `package.json`
 - [ ] Export the full dependency license list as JSON or Markdown, e.g. for a legal review
 
 ### Files
@@ -230,9 +230,9 @@ toolsmith is being built in twelve milestones. M1 is the foundation that every l
 
 ### Report
 
-- [ ] Findings grouped by severity, then by check, ending with a summary such as `2 errors, 5 warnings, 3 info`
-- [ ] `--json` for scripts, and a Markdown version for pull request comments
-- [ ] Exit code 1 when there are errors; `--fail-on warning` makes warnings fail the run too, e.g. in CI
+- [x] Findings grouped by severity, then by check, ending with a summary such as `2 errors, 5 warnings, 3 info`
+- [x] `--json` for scripts, and a Markdown version for pull request comments
+- [x] Exit code 1 when there are errors; `--fail-on warning` makes warnings fail the run too, e.g. in CI
 - [ ] `--fix` applies only safe fixes (such as patch updates), and `--dry-run` previews them
 
 ### Tests

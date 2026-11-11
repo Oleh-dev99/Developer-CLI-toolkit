@@ -32,6 +32,14 @@ export function setTopLevelValue(text, key, value) {
   return text.slice(0, last.end) + separator + entry(indent) + text.slice(last.end);
 }
 
+// The line (from 1) that the top-level `key` of `text`, which holds a JSON
+// object, starts on, or undefined when the object has no such key. Like
+// JSON.parse, it takes the last of repeated keys.
+export function topLevelKeyLine(text, key) {
+  const member = scanObject(text).members.findLast((item) => item.key === key);
+  return member && text.slice(0, member.keyStart).split("\n").length;
+}
+
 // Where the top-level object in `text` (valid JSON) opens and closes, and its
 // members, each with where its key starts and its value's span.
 function scanObject(text) {

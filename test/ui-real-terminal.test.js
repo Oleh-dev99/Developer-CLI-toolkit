@@ -101,10 +101,11 @@ test("in a real terminal, toolsmith ui answers keys, q alone quits with exit cod
   // At the size stty gave the terminal: the hints on row 24, and nothing below.
   assert.match(output, new RegExp(`${escape(terminal.moveTo(23))}(?:\\x1b\\[[0-9;]*m)* \\?: shortcuts`), `the hints aren't on row 24; ${shown()}`);
   assert.ok(!output.includes(terminal.moveTo(24)), `a row below row 24 was drawn; ${shown()}`);
-  // Down twice, as the terminal sends it: the third command is selected.
+  // Down three times, as the terminal sends it: the fourth command is selected.
   child.stdin.write("\x1b[B");
   child.stdin.write("\x1b[B");
-  await waitFor(/> git clean-branc/, "the third command to be selected");
+  child.stdin.write("\x1b[B");
+  await waitFor(/> git clean-branc/, "the fourth command to be selected");
   child.stdin.write("?");
   await waitFor(/Shortcuts/, "the shortcuts overlay");
   // q alone ends toolsmith: the keys' pipe, and so the terminal, stays open

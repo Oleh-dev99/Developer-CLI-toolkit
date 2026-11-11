@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { dirname, join, relative, resolve, sep } from "node:path";
+import { join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { createProgram } from "../src/cli.js";
@@ -8,7 +8,7 @@ import { createApp } from "../src/tui/app.js";
 import { describeCommands } from "../src/tui/commands.js";
 import { createDashboard, minimum } from "../src/tui/dashboard.js";
 import { box, center, createScreen, pad, paints, rowWidth, spread, terminal, truncate, truncateStart, width } from "../src/tui/screen.js";
-import { fakeTerminal, pressKeys, runCli, screenTerminalEnv, stopWhenDone, tempDir, terminalEnv, writeTempConfig } from "./helpers.js";
+import { fakeTerminal, loadedAtStart, pressKeys, runCli, screenTerminalEnv, stopWhenDone, tempDir, terminalEnv, writeTempConfig } from "./helpers.js";
 
 // The terminal side of `toolsmith ui` (src/tui/app.js), the drawing helpers
 // (src/tui/screen.js), and the command itself. ui-navigation.test.js has the
@@ -132,8 +132,8 @@ test("resizing: larger, smaller, below 40x10 and back, each size cleared and dra
   const term = fakeTerminal(60, 15);
   const app = createApp({ ...term, view: dashboard(t, { folder: "my-project", commands: describeCommands(createProgram()) }) });
   app.start();
-  // The third command.
-  await pressKeys(term, "j", "j");
+  // The fourth command, git clean-branches.
+  await pressKeys(term, "j", "j", "j");
   for (const [columns, rows] of [
     [100, 30],
     [50, 12],
@@ -331,24 +331,8 @@ test("the screen writes only the rows that changed", () => {
   assert.deepEqual(writes.slice(2), [terminal.clear, `${terminal.moveTo(0)}aaa${terminal.moveTo(1)}BBB${terminal.moveTo(2)}cc`]);
 });
 
-// The relative files that `file` imports statically (import ... from, or
-// export ... from), as absolute paths. import() isn't static, so it's left out.
-function staticImports(file) {
-  const text = readFileSync(file, "utf8");
-  const patterns = [/^\s*import\s+(?:[\w*{}\s,$]+\s+from\s+)?["'](\.[^"']+)["']/gm, /^\s*export\s+(?:\*|\{[^}]*\})\s+from\s+["'](\.[^"']+)["']/gm];
-  return patterns.flatMap((pattern) => Array.from(text.matchAll(pattern), ([, path]) => resolve(dirname(file), path)));
-}
-
 test("other commands don't load the UI's code: only toolsmith ui imports it, when it runs", () => {
-  const reached = new Set();
-  const visit = (file) => {
-    if (!reached.has(file)) {
-      reached.add(file);
-      staticImports(file).forEach(visit);
-    }
-  };
-  visit(join(root, "bin", "toolsmith.js"));
-  const files = [...reached].map((file) => relative(root, file).split(sep).join("/"));
+  const files = loadedAtStart();
   assert.ok(files.includes("src/commands/ui.js"), "the walk didn't reach the ui command");
   assert.deepEqual(
     files.filter((file) => file.startsWith("src/tui/")),
@@ -384,8 +368,8 @@ test("toolsmith ui draws its screen, and q restores the terminal: the normal scr
 });
 
 test("toolsmith ui answers keys typed in the terminal", async () => {
-  // Down twice, then quit: the last frame has the third command selected.
-  const { stdout, code } = await inTerminal(["ui"], {}, "jjq");
+  // Down three times, then quit: the last frame has the fourth command selected.
+  const { stdout, code } = await inTerminal(["ui"], {}, "jjjq");
   assert.equal(code, 0);
   assert.match(plain(stdout), /> git clean-branc/);
 });

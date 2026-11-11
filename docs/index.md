@@ -23,6 +23,8 @@ features:
     details: Delete merged and squash-merged branches, summarize recent commits as text, Markdown or JSON, and start commits from a ready-made message.
   - title: File tools
     details: Rename files with find and replace, find files with identical content, and see what's taking up the space.
+  - title: Project health
+    details: toolsmith doctor checks a project and reports its problems by severity, each with a fix, as text, JSON or Markdown for a pull request.
   - title: Plugins
     details: npm packages named toolsmith-plugin-* add their own commands, and toolsmith finds them where npm installs them.
 ---

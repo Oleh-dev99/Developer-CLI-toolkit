@@ -31,6 +31,7 @@ export default {
         items: [
           { text: "Getting started", link: "/getting-started" },
           { text: "Configuration", link: "/configuration" },
+          { text: "Project health", link: "/doctor" },
         ],
       },
       {

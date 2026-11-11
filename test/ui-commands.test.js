@@ -168,6 +168,7 @@ test("the Commands panel offers every built-in command that runs, with its --hel
     builtIn.map((command) => command.name),
     [
       "config",
+      "doctor",
       "dupes",
       "git clean-branches",
       "git recent",

@@ -51,7 +51,7 @@ test("getting started installs the published package, on the Node.js versions it
 test("every toolsmith command in the guide's examples exists", async () => {
   const builtIn = (await helpListing()).commands;
   const git = (await helpListing("git")).commands;
-  const examples = ["getting-started.md", "configuration.md"]
+  const examples = ["getting-started.md", "configuration.md", "doctor.md"]
     .flatMap((page) => shellLines(read(docs, page)))
     .filter((line) => line.startsWith("toolsmith "))
     .map((line) => line.split(" ").slice(1))
