@@ -8,7 +8,7 @@ import { createApp } from "../src/tui/app.js";
 import { describeCommands } from "../src/tui/commands.js";
 import { createDashboard, minimum } from "../src/tui/dashboard.js";
 import { box, center, createScreen, pad, paints, rowWidth, spread, terminal, truncate, truncateStart, width } from "../src/tui/screen.js";
-import { fakeTerminal, pressKeys, runCli, screenTerminalEnv, tempDir, terminalEnv, writeTempConfig } from "./helpers.js";
+import { fakeTerminal, pressKeys, runCli, screenTerminalEnv, stopWhenDone, tempDir, terminalEnv, writeTempConfig } from "./helpers.js";
 
 // The terminal side of `toolsmith ui` (src/tui/app.js), the drawing helpers
 // (src/tui/screen.js), and the command itself. ui-navigation.test.js has the
@@ -35,7 +35,7 @@ function assertRestored({ input, events }) {
 // reads the repository; it stops when the test ends.
 function dashboard(t, options = {}) {
   const view = createDashboard({ cwd: tempDir(t), editor: null, ...options });
-  t.after(() => view.dispose());
+  stopWhenDone(t, () => view.dispose());
   return view;
 }
 

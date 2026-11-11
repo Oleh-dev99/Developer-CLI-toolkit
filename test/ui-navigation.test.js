@@ -12,7 +12,7 @@ import { createDashboard } from "../src/tui/dashboard.js";
 import { hintsFor, keyOf, sections, shortcutLabel } from "../src/tui/keys.js";
 import { createList } from "../src/tui/list.js";
 import { paints } from "../src/tui/screen.js";
-import { fakeTerminal, pressKeys, tempDir } from "./helpers.js";
+import { fakeTerminal, pressKeys, stopWhenDone, tempDir } from "./helpers.js";
 
 // Keyboard navigation in `toolsmith ui`: the key table (src/tui/keys.js), the
 // list component (src/tui/list.js) and the dashboard (src/tui/dashboard.js),
@@ -49,12 +49,14 @@ for (let number = 1; number <= 24; number++) {
 after(() => rmSync(folder, { recursive: true, force: true, maxRetries: 10 }));
 
 // The UI in a pretend terminal, with keys to press and the screen as text,
-// once the Files panel shows `shows`: when it has read its folder.
-async function session(columns = 40, rows = 10, { cwd = folder, shows = "file01.txt" } = {}) {
+// once the Files panel shows `shows`: when it has read its folder. It's
+// stopped when the test `t` ends, if end() wasn't reached.
+async function session(t, columns = 40, rows = 10, { cwd = folder, shows = "file01.txt" } = {}) {
   const term = fakeTerminal(columns, rows);
   const view = createDashboard({ folder: "my-project", commands, cwd, editor: null });
   const app = createApp({ ...term, view });
   app.start();
+  stopWhenDone(t, () => app.stop());
   // Until the files are read and on screen; a redraw comes a moment later.
   while (!app.rows().some((row) => row.includes(shows))) {
     await new Promise((resolve) => setTimeout(resolve, 10));
@@ -72,8 +74,8 @@ async function session(columns = 40, rows = 10, { cwd = folder, shows = "file01.
   };
 }
 
-test("scripted key presses at 40x10: panels, End, a filter, a command's form, and back", async () => {
-  const ui = await session();
+test("scripted key presses at 40x10: panels, End, a filter, a command's form, and back", async (t) => {
+  const ui = await session(t);
   // Outside a git repository, the two panels share the width.
   assert.deepEqual(ui.screen(), [
     " toolsmith ui                my-project ",
@@ -145,8 +147,8 @@ test("scripted key presses at 40x10: panels, End, a filter, a command's form, an
 // a blank line between sections.
 const overlayLines = sections.reduce((lines, section) => lines + section.shortcuts.length + 1, sections.length - 1);
 
-test("the shortcuts overlay lists the key table, scrolls, and closes with Esc or ?", async () => {
-  const ui = await session();
+test("the shortcuts overlay lists the key table, scrolls, and closes with Esc or ?", async (t) => {
+  const ui = await session(t);
   await ui.press("?");
   assert.deepEqual(ui.screen(), [
     " toolsmith ui                my-project ",
@@ -171,9 +173,9 @@ test("the shortcuts overlay lists the key table, scrolls, and closes with Esc or
   await ui.end();
 });
 
-test("every shortcut in the key table is in the overlay, and the hints at the bottom come from it", async () => {
+test("every shortcut in the key table is in the overlay, and the hints at the bottom come from it", async (t) => {
   // Tall enough for the whole overlay.
-  const ui = await session(120, overlayLines + 6);
+  const ui = await session(t, 120, overlayLines + 6);
   await ui.press("?");
   const overlay = ui.screen().join("\n");
   assert.match(overlay, new RegExp(`└ 1-${overlayLines}/${overlayLines} `));
@@ -294,8 +296,8 @@ test("the codes different terminals send for a key all mean the same key", async
   assert.deepEqual(await decode("\x1bq"), [null]);
 });
 
-test("the classic Windows console's codes with Node.js 22 move around like the others", async () => {
-  const ui = await session();
+test("the classic Windows console's codes with Node.js 22 move around like the others", async (t) => {
+  const ui = await session(t);
   await ui.press("\t", "\x1b[4~");
   assert.match(ui.screen()[8], /> +file24\.txt/);
   await ui.press("\x1b[1~");
@@ -305,8 +307,8 @@ test("the classic Windows console's codes with Node.js 22 move around like the o
   await ui.end();
 });
 
-test("arrow keys and h, j, k, l move, and the panels wrap around", async () => {
-  const ui = await session();
+test("arrow keys and h, j, k, l move, and the panels wrap around", async (t) => {
+  const ui = await session(t);
   const selected = () => ui.screen().find((row) => row.startsWith(">"));
   await ui.press("j", "j", key.down);
   assert.match(selected(), /^> git recent/);
@@ -335,8 +337,8 @@ test("arrow keys and h, j, k, l move, and the panels wrap around", async () => {
   await ui.end();
 });
 
-test("PgDn and PgUp move a page, and the selection stays in view", async () => {
-  const ui = await session();
+test("PgDn and PgUp move a page, and the selection stays in view", async (t) => {
+  const ui = await session(t);
   await ui.press(key.tab, key.pageDown);
   // Seven rows of files are in view; a page is one less, so one stays.
   assert.match(ui.screen()[8], /> +file07\.txt/);
@@ -348,8 +350,8 @@ test("PgDn and PgUp move a page, and the selection stays in view", async () => {
   await ui.end();
 });
 
-test("the focused panel stands out without colors: an inverse header and selection", async () => {
-  const ui = await session(60, 12);
+test("the focused panel stands out without colors: an inverse header and selection", async (t) => {
+  const ui = await session(t, 60, 12);
   await ui.press(key.tab);
   const [, header, firstRow] = ui.raw();
   const parts = header.split("│");
@@ -363,9 +365,9 @@ test("the focused panel stands out without colors: an inverse header and selecti
   await ui.end();
 });
 
-test("/ filters as you type: any case, Backspace edits, Esc clears, and keys like q are typed", async () => {
+test("/ filters as you type: any case, Backspace edits, Esc clears, and keys like q are typed", async (t) => {
   // Wide enough for the filter and the position in the header.
-  const ui = await session(80, 12);
+  const ui = await session(t, 80, 12);
   await ui.press("/", "G", "I", "T", " ", "R");
   assert.match(ui.screen()[1], /^ Commands \/GIT R_ +1\/1 │/);
   assert.match(ui.screen()[2], /^> git recent/);
@@ -388,7 +390,7 @@ test("/ filters as you type: any case, Backspace edits, Esc clears, and keys lik
 });
 
 test("an empty panel says so, and Enter there opens nothing", async (t) => {
-  const ui = await session(60, 12, { cwd: tempDir(t), shows: "Empty folder" });
+  const ui = await session(t, 60, 12, { cwd: tempDir(t), shows: "Empty folder" });
   await ui.press(key.tab);
   assert.match(ui.screen()[2], /│ {2}Empty folder +$/);
   await ui.press(key.enter, key.right);
@@ -397,11 +399,11 @@ test("an empty panel says so, and Enter there opens nothing", async (t) => {
   await ui.end();
 });
 
-test("Ctrl+C quits from the panels, a filter, a form, the files, a preview and the overlay, and q where it isn't typed", async () => {
+test("Ctrl+C quits from the panels, a filter, a form, the files, a preview and the overlay, and q where it isn't typed", async (t) => {
   const setups = { panels: [], filter: ["/"], form: [key.enter], files: [key.tab], preview: [key.tab, key.enter], help: ["?"] };
   for (const [context, keys] of Object.entries(setups)) {
     for (const quit of [key.ctrlC, "q"]) {
-      const ui = await session();
+      const ui = await session(t);
       await ui.press(...keys);
       assert.equal(ui.view.context(), context);
       await ui.press(quit);

@@ -13,7 +13,7 @@ import { createDashboard } from "../src/tui/dashboard.js";
 import { createForm } from "../src/tui/form.js";
 import { runCommand } from "../src/tui/runner.js";
 import { paints } from "../src/tui/screen.js";
-import { fakeTerminal, makeTree, pluginPackage, pressKeys, runCli, screenTerminalEnv, tempDir } from "./helpers.js";
+import { fakeTerminal, makeTree, pluginPackage, pressKeys, runCli, screenTerminalEnv, stopWhenDone, tempDir } from "./helpers.js";
 
 // The command menu of `toolsmith ui`: the commands it lists (src/tui/commands.js),
 // their forms (src/tui/form.js), running them (src/tui/runner.js), and all of
@@ -159,7 +159,7 @@ async function session(t, columns = 80, rows = 20) {
       assert.match(app.rows()[1], new RegExp(`toolsmith ${name} `));
     },
   };
-  t.after(() => app.stop());
+  stopWhenDone(t, () => app.stop());
   return ui;
 }
 

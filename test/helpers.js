@@ -156,14 +156,39 @@ export async function helpListing(...words) {
   };
 }
 
-// Creates a temp folder that is deleted when the test `t` finishes. On
-// Windows, a folder can't be deleted while a process runs in it, like one that
-// was just cancelled and is still ending, and rmSync then fails at once
-// (EPERM or EBUSY; its maxRetries doesn't cover that), so deleting it is tried
-// again for up to two seconds.
+// What each test started that must stop when it ends (see stopWhenDone).
+const started = new WeakMap();
+
+// Calls `stop` when the test `t` ends, once, and before any of its temp
+// folders are deleted: for what a test starts that would keep its process
+// running, like a dashboard, which watches its folder. t.after() runs hooks in
+// the order they were added, and skips the rest when one fails, as deleting a
+// folder can; tempDir() is mostly called first, so its hook comes first, and
+// it stops these before it deletes anything.
+export function stopWhenDone(t, stop) {
+  let stopped = false;
+  const once = () => {
+    if (!stopped) {
+      stopped = true;
+      stop();
+    }
+  };
+  started.set(t, [...(started.get(t) ?? []), once]);
+  t.after(once);
+}
+
+// Creates a temp folder that is deleted when the test `t` finishes, after what
+// the test started is stopped (see stopWhenDone). On Windows, a folder can't
+// be deleted while a process runs in it, like one that was just cancelled and
+// is still ending, and rmSync then fails at once (EPERM or EBUSY; its
+// maxRetries doesn't cover that), so deleting it is tried again for up to two
+// seconds.
 export function tempDir(t) {
   const dir = mkdtempSync(join(tmpdir(), "toolsmith-test-"));
   t.after(async () => {
+    for (const stop of started.get(t) ?? []) {
+      stop();
+    }
     for (let attempt = 1; ; attempt++) {
       try {
         rmSync(dir, { recursive: true, force: true });
@@ -215,14 +240,25 @@ export function canLockFolders() {
 }
 
 // Runs `task` with `folder` locked (see lock()), and unlocks it after, even
-// when `task` fails. The folder is unlocked before the test ends, so that the
-// temp folder it's in can be deleted: t.after() runs hooks in the order they
-// were registered, which puts deleting the temp folder first.
-export async function whileLocked(folder, task) {
-  const unlock = lock(folder);
+// when `task` fails, so that the temp folder it's in can be deleted when the
+// test `t` ends. It's unlocked as soon as `t` ends, too, even if `task` hasn't:
+// when something the test started throws where nothing catches it, the test
+// runner fails the test and ends it at once, and runs its after hooks, while
+// `task` goes on.
+export async function whileLocked(t, folder, task) {
+  const unlockFolder = lock(folder);
+  let locked = true;
+  const unlock = () => {
+    if (locked) {
+      locked = false;
+      unlockFolder();
+    }
+  };
+  t.signal.addEventListener("abort", unlock, { once: true });
   try {
     return await task();
   } finally {
+    t.signal.removeEventListener("abort", unlock);
     unlock();
   }
 }

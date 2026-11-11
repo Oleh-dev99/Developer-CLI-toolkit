@@ -105,7 +105,7 @@ test(
     const root = makeTree(t, { "locked/secret.txt": "x", "open.txt": "y" });
     const locked = join(root, "locked");
     const errorOutput = t.mock.method(console, "error", () => {});
-    const entries = await whileLocked(locked, () => list(root));
+    const entries = await whileLocked(t, locked, () => list(root));
     assert.deepEqual(entries, [
       ["locked", "directory"],
       ["open.txt", "file"],

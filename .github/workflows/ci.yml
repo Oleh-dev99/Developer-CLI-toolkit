@@ -15,6 +15,9 @@ jobs:
   test:
     name: Node ${{ matrix.node }} on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
+    # A guard only: a job takes about a minute, and a test that hangs should
+    # fail the job well before GitHub's limit of 6 hours.
+    timeout-minutes: 15
     strategy:
       # Finish every combination, so one failure doesn't hide the others.
       fail-fast: false

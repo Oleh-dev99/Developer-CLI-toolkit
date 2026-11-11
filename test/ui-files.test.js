@@ -15,7 +15,7 @@ import { editorCommand, openerFor, openWithApp } from "../src/tui/open.js";
 import { previewLimit, readPreview } from "../src/tui/preview.js";
 import { plainLine, terminal, width } from "../src/tui/screen.js";
 import { createTree } from "../src/tui/tree.js";
-import { canLockFolders, fakeTerminal, makeTree, pressKeys, tempDir, whileLocked } from "./helpers.js";
+import { canLockFolders, fakeTerminal, makeTree, pressKeys, stopWhenDone, tempDir, whileLocked } from "./helpers.js";
 
 // The Files panel of `toolsmith ui`: the folder tree (src/tui/tree.js), file
 // previews (src/tui/preview.js), opening files (src/tui/open.js), and the file
@@ -62,7 +62,7 @@ async function session(t, { files = project, columns = 80, rows = 20, ...options
   const view = createDashboard({ folder: "project", commands, cwd, env, editor: null, ...options });
   const app = createApp({ ...term, view });
   app.start();
-  t.after(() => app.stop());
+  stopWhenDone(t, () => app.stop());
   const ui = {
     cwd,
     term,
@@ -294,7 +294,7 @@ const bottomRow = (ui) => ui.screen().split("\n").at(-1);
 test("an unreadable folder is a warning, not an error, that names it as the Files panel does", lockable, async (t) => {
   const ui = await session(t, { files: { ...project, "locked/secret.txt": "s" } });
   const locked = join(ui.cwd, "locked");
-  await whileLocked(locked, async () => {
+  await whileLocked(t, locked, async () => {
     await ui.select("locked");
     await ui.press(key.right);
     await ui.until(/locked\/ +can't read/, "the warning in the tree");
@@ -313,13 +313,14 @@ test("an unreadable folder is a warning, not an error, that names it as the File
 test("a folder locked while the dashboard runs doesn't stop the Files list following changes, and isn't reported again", lockable, async (t) => {
   const ui = await session(t, { files: { ...project, "locked/secret.txt": "s" } });
   const warning = " warning: can't read folder locked (permission denied)";
-  await whileLocked(join(ui.cwd, "locked"), async () => {
+  await whileLocked(t, join(ui.cwd, "locked"), async () => {
     await ui.select("locked");
     await ui.press(key.right);
     await ui.until(/locked\/ +can't read/, "the warning in the tree");
     assert.equal(bottomRow(ui), warning);
-    // On Linux, Node's watcher reports the folder it can't list any more as
-    // an error, and goes on watching everything else; so does the dashboard.
+    // The dashboard goes on watching everything else. (On Linux, with
+    // Node 24.22 or 26.13, Node's own recursive watcher threw an uncaught
+    // EACCES as soon as the folder was locked; see src/tui/watch.js.)
     writeFileSync(join(ui.cwd, "after.txt"), "after");
     await ui.until(/after\.txt +5 B/, "the new file");
     // The sizes are added up again, without the locked folder, and that
@@ -332,7 +333,7 @@ test("a folder locked while the dashboard runs doesn't stop the Files list follo
 test("a folder that can't be read from the start is reported once, by its path from the panel's folder", lockable, async (t) => {
   const root = makeTree(t, { "locked/secret.txt": "s", "open.txt": "o" });
   const warnings = [];
-  await whileLocked(join(root, "locked"), async () => {
+  await whileLocked(t, join(root, "locked"), async () => {
     const tree = createTree(root, { onWarning: (message) => warnings.push(message) });
     t.after(() => tree.stop());
     await until(() => tree.totalSize() !== undefined, "the sizes");
@@ -349,7 +350,7 @@ test("a symlink is shown, but never followed", async (t) => {
   // A junction on Windows needs no special rights.
   symlinkSync(join(cwd, "docs"), join(cwd, "shortcut"), windows ? "junction" : "dir");
   const linked = createDashboard({ cwd, commands, editor: null });
-  t.after(() => linked.dispose());
+  stopWhenDone(t, () => linked.dispose());
   await until(() => linked.tree.totalSize() !== undefined, "the sizes");
   const rows = linked.tree.list.render(40, 10).map((row) => row.trimEnd());
   assert.ok(rows.some((row) => /shortcut@ +link$/.test(row)), rows.join("\n"));

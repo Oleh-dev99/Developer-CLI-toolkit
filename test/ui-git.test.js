@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { existsSync, mkdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { createProgram } from "../src/cli.js";
@@ -11,8 +10,8 @@ import { describeCommands } from "../src/tui/commands.js";
 import { createDashboard } from "../src/tui/dashboard.js";
 import { hintsFor } from "../src/tui/keys.js";
 import { createGitStatus, findRepository, parseStatus, statusRows } from "../src/tui/status.js";
-import { aboutOneEntry, changeOf, watchTree } from "../src/tui/watch.js";
-import { fakeTerminal, makeRepo, makeTree, pressKeys, tempDir } from "./helpers.js";
+import { changeOf, watchFolders, watchTree } from "../src/tui/watch.js";
+import { canLockFolders, fakeTerminal, makeRepo, makeTree, pressKeys, stopWhenDone, tempDir, whileLocked } from "./helpers.js";
 
 // The Git status panel of `toolsmith ui` (src/tui/status.js), following
 // changes with a folder watch (src/tui/watch.js), and its shortcuts to the git
@@ -50,7 +49,7 @@ async function session(t, repo, { columns = 90, rows = 14, ...options } = {}) {
   const view = createDashboard({ folder: "repo", commands, cwd: repo.dir, env: environment(t, repo), editor: null, ...options });
   const app = createApp({ ...term, view });
   app.start();
-  t.after(() => app.stop());
+  stopWhenDone(t, () => app.stop());
   const ui = {
     app,
     view,
@@ -371,24 +370,45 @@ test("what the watcher counts as a change: node_modules, git's objects and lock 
   assert.deepEqual(changeOf("docs-old/x.md", "docs/"), { files: false });
 });
 
-test("the watcher goes on after an error about one entry in the tree, which Node's watcher on Linux reports", () => {
-  const root = join(tmpdir(), "project");
-  // As Node's fs.watch reports them: the errors of the watcher on Linux name
-  // the entry by its full path, those of macOS's and Windows' by its name in
-  // the tree, if at all, and mean they've stopped.
-  const error = (code, syscall, path) => Object.assign(new Error(`${code}: ${syscall} ${path}`), { code, syscall, path });
-  assert.equal(aboutOneEntry(error("EACCES", "scandir", join(root, "locked")), root), true);
-  assert.equal(aboutOneEntry(error("EACCES", "watch", join(root, "src", "locked")), root), true);
-  assert.equal(aboutOneEntry(error("EPERM", "scandir", join(root, "locked")), root), true);
-  assert.equal(aboutOneEntry(error("ENOENT", "scandir", join(root, "deleted")), root), true);
-  assert.equal(aboutOneEntry(error("EACCES", "scandir", join(root, "..locked")), root), true);
-  // Errors that stop the watch.
-  assert.equal(aboutOneEntry(error("ENOSPC", "watch", join(root, "src")), root), false);
-  assert.equal(aboutOneEntry(error("EPERM", "watch", "locked"), root), false);
-  assert.equal(aboutOneEntry(error("EPERM", "watch", undefined), root), false);
-  assert.equal(aboutOneEntry(error("EACCES", "scandir", root), root), false);
-  assert.equal(aboutOneEntry(error("EACCES", "scandir", join(root, "..", "elsewhere")), root), false);
-  assert.equal(aboutOneEntry(error("EACCES", "scandir", `${root}-old`), root), false);
+test("watching folder by folder, as on Linux: new, renamed and deleted folders, and never node_modules or git's objects", async (t) => {
+  const dir = makeTree(t, { "src/app.js": "a", "node_modules/x/index.js": "x", ".git/objects/ab/cd": "o", ".git/refs/heads/main": "m" });
+  const changes = [];
+  const watcher = watchFolders(dir, { onChange: (path) => changes.push(path), onError: (err) => assert.fail(err) });
+  stopWhenDone(t, () => watcher.close());
+  const seen = (path) => until(() => changes.includes(path), path);
+  assert.deepEqual(watcher.folders(), ["", ".git", ".git/refs", ".git/refs/heads", "src"]);
+  writeFileSync(join(dir, "src", "app.js"), "changed");
+  await seen("src/app.js");
+  // A new folder is watched as it comes, and what's put in it is seen.
+  mkdirSync(join(dir, "docs"));
+  await seen("docs");
+  writeFileSync(join(dir, "docs", "guide.md"), "g");
+  await seen("docs/guide.md");
+  // Renamed, it's watched under its new name.
+  renameSync(join(dir, "docs"), join(dir, "manual"));
+  await seen("manual");
+  writeFileSync(join(dir, "manual", "more.md"), "m");
+  await seen("manual/more.md");
+  assert.deepEqual(watcher.folders(), ["", ".git", ".git/refs", ".git/refs/heads", "manual", "src"]);
+  // Deleted, it isn't any more.
+  rmSync(join(dir, "manual"), { recursive: true });
+  await until(() => !watcher.folders().includes("manual"), "manual to be forgotten");
+  watcher.close();
+  assert.deepEqual(watcher.folders(), []);
+});
+
+test("a folder locked while it's watched isn't an error, and the rest is still watched", { skip: !canLockFolders() && "this user can read every folder (root, or on Windows with the backup privilege on)" }, async (t) => {
+  const dir = makeTree(t, { "locked/secret.txt": "s", "src/app.js": "a" });
+  const calls = [];
+  // With Node 24.22 or 26.13, Node's own recursive watcher threw an uncaught
+  // EACCES on Linux as soon as the folder was locked, which failed this test.
+  const watcher = watchTree(dir, { filesIn: "src/", onChange: (change) => calls.push(change), onError: (err) => assert.fail(err), quiet: 50 });
+  stopWhenDone(t, () => watcher.close());
+  await whileLocked(t, join(dir, "locked"), async () => {
+    // Only a change in src counts for `files`.
+    writeFileSync(join(dir, "src", "new.js"), "n");
+    await until(() => calls.some((change) => change.files), "the change in src");
+  });
 });
 
 test("the watcher groups a burst of changes into one, ignores node_modules, and stops when closed", async (t) => {

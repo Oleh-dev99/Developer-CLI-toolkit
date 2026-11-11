@@ -1,21 +1,27 @@
-import { watch } from "node:fs";
-import { isAbsolute, relative, resolve, sep } from "node:path";
+import { lstatSync, readdirSync, watch } from "node:fs";
+import { join, relative, sep } from "node:path";
 
 // Watching the folder tree for toolsmith ui, so that the Files panel and the
 // Git status panel keep up with changes made outside it.
 
-// Watches everything under `root` with one recursive fs.watch, and calls
-// `onChange({ files, git })` once for each burst of changes: `files` when
-// something under `filesIn` changed (a folder in `root`, as a relative path
-// ending in "/", or "" for all of it), `git` when the git status may have
-// changed (anything outside .git, or in it). A burst ends after `quiet`
-// milliseconds without changes, or `longest` milliseconds after it began,
-// whichever comes first. Changes in node_modules, in .git/objects (which a
-// commit also shows elsewhere) and to git's lock files are ignored. On Linux,
-// Node watches every folder for this, node_modules too, and only the changes
-// there are ignored. Errors, like running out of watches, go to `onError`;
-// nothing is watched then. An error about one entry in the tree, which only
-// Linux has (see aboutOneEntry), isn't one of them: watching goes on.
+// On macOS and Windows, one fs.watch watches a whole tree, with the system's
+// own recursive watching. Elsewhere, on Linux above all, the system can only
+// watch one folder at a time, and Node's recursive fs.watch does that in
+// JavaScript; since Node 24.22 and 26.13, that code throws from inside
+// fs.watch's callback when a folder in the tree can't be searched any more
+// (after chmod 000, say): an uncaught EACCES that ends the dashboard, and
+// that nothing here could catch. There, watchFolders() does the work instead.
+const watchesTrees = process.platform === "darwin" || process.platform === "win32";
+
+// Watches everything under `root`, and calls `onChange({ files, git })` once
+// for each burst of changes: `files` when something under `filesIn` changed (a
+// folder in `root`, as a relative path ending in "/", or "" for all of it),
+// `git` when the git status may have changed (anything outside .git, or in
+// it). A burst ends after `quiet` milliseconds without changes, or `longest`
+// milliseconds after it began, whichever comes first. Changes in node_modules,
+// in .git/objects (which a commit also shows elsewhere) and to git's lock
+// files are ignored. Errors, like running out of watches, go to `onError`;
+// nothing is watched then.
 export function watchTree(root, { onChange, onError = () => {}, filesIn = "", quiet = 150, longest = 1000 }) {
   const pending = { files: false, git: false };
   let timer = null;
@@ -27,9 +33,13 @@ export function watchTree(root, { onChange, onError = () => {}, filesIn = "", qu
     pending.git = false;
     onChange(changed);
   };
-  const note = (files) => {
+  const note = (path) => {
+    const change = changeOf(path, filesIn);
+    if (!change) {
+      return;
+    }
     pending.git = true;
-    pending.files ||= files;
+    pending.files ||= change.files;
     const now = Date.now();
     if (timer === null) {
       started = now;
@@ -38,49 +48,146 @@ export function watchTree(root, { onChange, onError = () => {}, filesIn = "", qu
     timer = setTimeout(flush, now - started >= longest ? 0 : quiet);
   };
 
+  const watcher = watchesTrees ? watchWhole(root, note, onError) : watchFolders(root, { onChange: note, onError });
+  return {
+    close() {
+      clearTimeout(timer);
+      watcher.close();
+    },
+  };
+}
+
+// One recursive fs.watch on `root`, for macOS and Windows: `onChange` gets the
+// path that changed, relative to `root` and with "/".
+function watchWhole(root, onChange, onError) {
   let watcher = null;
   try {
-    watcher = watch(root, { recursive: true }, (event, name) => {
-      // Some systems don't say what changed; then anything may have.
-      const change = changeOf(name ? String(name).replaceAll("\\", "/") : "", filesIn);
-      if (change) {
-        note(change.files);
-      }
-    });
+    // Some systems don't always say what changed; then anything may have.
+    watcher = watch(root, { recursive: true }, (event, name) => onChange(name ? String(name).replaceAll("\\", "/") : ""));
     watcher.on("error", (err) => {
-      if (aboutOneEntry(err, root)) {
-        return;
-      }
       onError(err);
       watcher.close();
     });
   } catch (err) {
     onError(err);
   }
-  return {
-    close() {
-      clearTimeout(timer);
-      watcher?.close();
-    },
-  };
+  return { close: () => watcher?.close() };
 }
 
-// Whether a watcher's error `err` is only about one entry in the tree under
-// `root`, so that watching can go on. On macOS and Windows, one fs.watch
-// watches the whole tree, and its error means it has stopped; the error's path
-// is then a name relative to `root`, if there's one. On Linux, where the system
-// can't watch a whole tree, Node watches each folder and file in it by itself,
-// lists a folder again when it changes, and when it can't list or watch one,
-// it reports that as an error with the entry's full path, and goes on watching
-// all the others: EACCES (or EPERM) for a folder that was locked, like with
-// chmod 000, and, on Node 22, ENOENT for one that was just deleted. Nothing in
-// such a folder could be shown anyway.
-export function aboutOneEntry(err, root) {
-  if (!["EACCES", "EPERM", "ENOENT"].includes(err?.code) || typeof err.path !== "string" || !isAbsolute(err.path)) {
-    return false;
-  }
-  const path = relative(resolve(root), err.path);
-  return path !== "" && path !== ".." && !path.startsWith(`..${sep}`) && !isAbsolute(path);
+// What a folder that can't be watched or listed says: it's locked, or it's
+// gone, or it isn't a folder any more.
+const notThere = new Set(["EACCES", "EPERM", "ENOENT", "ENOTDIR"]);
+
+// Watches the tree under `root` one folder at a time, with a plain fs.watch
+// for each (a folder's watch reports its entries by name, so files need no
+// watch of their own), and calls `onChange(path)` with the path of each entry
+// that changed, relative to `root` and with "/". New folders, and folders
+// renamed or moved here, are watched as they come, and those that go aren't
+// any more. node_modules and .git/objects aren't watched at all (changeOf()
+// ignores what changes there anyway), and symlinks are never followed. A
+// folder that can't be watched or listed, because it's locked or already
+// gone, is simply left out, and tried again when it changes, as it does when
+// it's unlocked. Only an error that isn't about one folder in it, like running
+// out of watches or `root` itself not being there, goes to `onError`, and
+// nothing is watched after that, as when one fs.watch fails. `folders()` lists
+// the folders watched, relative to `root`, with "/" ("" for `root`).
+export function watchFolders(root, { onChange, onError = () => {} }) {
+  const watchers = new Map(); // folder → its fs.watch
+  let stopped = false;
+  const relativePath = (path) => relative(root, path).split(sep).join("/");
+  const left = (folder) => /(^|\/)node_modules$|^\.git\/objects$/.test(relativePath(folder));
+
+  const stop = () => {
+    stopped = true;
+    for (const watcher of watchers.values()) {
+      watcher.close();
+    }
+    watchers.clear();
+  };
+  const fail = (err) => {
+    stop();
+    onError(err);
+  };
+
+  // Stops watching `folder` and the folders in it.
+  const forget = (folder) => {
+    if (!watchers.has(folder)) {
+      return;
+    }
+    for (const [path, watcher] of watchers) {
+      if (path === folder || path.startsWith(folder + sep)) {
+        watcher.close();
+        watchers.delete(path);
+      }
+    }
+  };
+
+  // Watches `folder`, then the folders in it.
+  const add = (folder) => {
+    if (stopped || watchers.has(folder) || left(folder)) {
+      return;
+    }
+    let watcher;
+    try {
+      watcher = watch(folder, (event, name) => changed(folder, name));
+    } catch (err) {
+      if (folder === root || !notThere.has(err.code)) {
+        fail(err);
+      }
+      return;
+    }
+    // An error is about this folder only, like it being deleted on Windows.
+    watcher.on("error", () => forget(folder));
+    watchers.set(folder, watcher);
+    let entries = [];
+    try {
+      entries = readdirSync(folder, { withFileTypes: true });
+    } catch {
+      // Locked, or gone: what's in it isn't watched.
+    }
+    for (const entry of entries) {
+      if (entry.isDirectory()) {
+        add(join(folder, entry.name));
+      }
+    }
+  };
+
+  // Something about the entry `name` in `folder` changed. On Linux, a change
+  // to the folder itself is reported under the folder's own name; the path is
+  // then one in the folder that isn't there, which is still the right folder
+  // for onChange.
+  const changed = (folder, name) => {
+    if (stopped) {
+      return;
+    }
+    const path = name ? join(folder, String(name)) : folder;
+    onChange(relativePath(path));
+    if (!name || stopped) {
+      return;
+    }
+    let stats;
+    try {
+      stats = lstatSync(path);
+    } catch (err) {
+      if (err.code === "ENOENT" || err.code === "ENOTDIR") {
+        forget(path);
+      }
+      // Otherwise it can't be looked at, as in a locked folder: it stays as
+      // it was.
+      return;
+    }
+    if (stats.isDirectory()) {
+      add(path);
+    } else {
+      forget(path);
+    }
+  };
+
+  add(root);
+  return {
+    folders: () => [...watchers.keys()].map(relativePath).sort(),
+    close: stop,
+  };
 }
 
 // What a change to `path` (relative to the watched folder, with "/", or ""
