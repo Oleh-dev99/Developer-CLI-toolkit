@@ -30,6 +30,24 @@ In Windows Terminal, open PowerShell in your clone of this repository (it's a gi
 - [ ] Start it again, and Ctrl+C quits the same way.
 - [ ] Start it again, open a command's form (Enter), and press Ctrl+C there: it quits the same way too.
 
-To report back, write down the Windows build (`winver`), the Windows Terminal version (Settings, About), `node --version`, and any item that didn't work, with what you saw. When everything works, the first Foundation box of M7 in [ROADMAP.md](../ROADMAP.md) can be ticked.
+Then write down the Windows build (`winver`), the Windows Terminal version (Settings, About, or `Get-AppxPackage Microsoft.WindowsTerminal | Select-Object Version` in PowerShell) and `node --version`, and add them to the [results](#results), with any item that didn't work and what you saw. Go through the list again after a change to how the dashboard draws the screen or reads keys.
 
-The same list works in the classic Windows console (start `conhost.exe` from the Run dialog, Win+R), with one known difference: with Node.js 22, it sends Shift+Tab as a plain Tab, so use Left or `h` to go to the previous panel there.
+## The classic Windows console
+
+The same list works in the classic Windows console, conhost (start `conhost.exe` from the Run dialog, Win+R), with these known differences:
+
+- With Node.js 22, it sends Shift+Tab as a plain Tab, so use Left or `h` to go to the previous panel there.
+- The cursor stays visible while the dashboard runs.
+- Some characters show as empty boxes, because the console's font has no shape for them.
+
+toolsmith doesn't work around them.
+
+## Results
+
+### 2026-11-11
+
+- **Windows Terminal 1.24.12741.0**, on Windows 10 Pro 22H2 (build 19045.6466), with Node.js v26.5.0: every item on the list passed.
+- **The classic Windows console**, on the same Windows and Node.js: the cursor stayed visible, and some characters showed as empty boxes (the console's font).
+- **Linux and macOS:** `test/ui-real-terminal.test.js` ran and passed in a pseudo-terminal opened by `script` on all eight Linux and macOS jobs of [the CI run](https://github.com/Oleh-dev99/Developer-CLI-toolkit/actions/runs/42965694116) for commit 9733053: Node.js 22.12.0, 22.x, 24.x and 26.x, on ubuntu-latest and macos-latest.
+
+With these results, the first Foundation box of M7 in [ROADMAP.md](../ROADMAP.md) is ticked: the dashboard draws the screen with its own small renderer on readline `keypress` events, without Ink or any other library for it.

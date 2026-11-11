@@ -162,7 +162,7 @@ toolsmith is being built in twelve milestones. M1 is the foundation that every l
 
 ### Foundation
 
-- [ ] Choose how to draw the screen (e.g. Ink, or a small renderer on `readline` keypress events) after prototyping in Windows Terminal, the classic Windows console, macOS Terminal and a Linux terminal
+- [x] Choose how to draw the screen (e.g. Ink, or a small renderer on `readline` keypress events) after prototyping in Windows Terminal, the classic Windows console, macOS Terminal and a Linux terminal
 - [x] Load the TUI code only when `toolsmith ui` runs, so other commands stay fast
 - [x] Full-screen layout in the terminal's alternate screen that redraws on resize, with a "terminal too small" message below a minimum size
 - [x] Always restore the terminal (cursor, raw mode, normal screen) on exit, on Ctrl+C and after a crash
