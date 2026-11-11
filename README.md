@@ -162,7 +162,9 @@ npm install
 node bin/toolsmith.js --help
 ```
 
-`npm test` runs every test. The npm package holds only what toolsmith needs to run: `bin/`, `src/` and `templates/` (the `"files"` in `package.json`), with the README and the license. `npm pack --dry-run` lists it, and a test checks that the list is exactly that, so tests, docs and the example plugin never end up in the package.
+`npm test` runs every test. The dashboard's tests drive `toolsmith ui` with the codes a terminal sends for each key. Its screens at 80×24, with colors off and on, are kept as text in [test/snapshots/](test/snapshots); when a change alters one, the test shows the lines that differ, and `npm run test:update-snapshots` writes the new screens, to check in the diff before committing. On Linux and macOS, a test also runs `toolsmith ui` in a real terminal, opened with the system's `script` command; [docs/TERMINALS.md](docs/TERMINALS.md) lists what to check by hand in Windows Terminal.
+
+The npm package holds only what toolsmith needs to run: `bin/`, `src/` and `templates/` (the `"files"` in `package.json`), with the README and the license. `npm pack --dry-run` lists it, and a test checks that the list is exactly that, so tests, docs and the example plugin never end up in the package.
 
 The documentation site is made from the Markdown pages in [docs/](docs) with [VitePress](https://vitepress.dev/). It has its own dependencies, so they don't add to toolsmith's install or slow down its tests. To see the site with your changes while you edit:
 

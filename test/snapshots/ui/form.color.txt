@@ -1,0 +1,24 @@
+{bold} toolsmith ui                                                        my-project {/bold}
+{inverse} toolsmith size  show the biggest folders and files under a folder              {/inverse}
+{inverse}> [path]          docs_                                                         {/inverse}
+  --depth <n>     (default: 1)
+  --top <n>       (default: 10)
+  --files-only    [ ]
+  --folders-only  [ ]
+  --all           [ ]
+  --json          [ ]
+
+
+
+
+
+
+
+
+
+
+
+
+ the folder to measure (default: the current folder)
+ $ toolsmith size docs
+{inverse} Enter: run  Esc: back  Space: tick  Down: next field                          {/inverse}

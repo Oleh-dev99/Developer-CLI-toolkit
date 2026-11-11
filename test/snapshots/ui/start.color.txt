@@ -1,0 +1,24 @@
+{bold} toolsmith ui                                                        my-project {/bold}
+{inverse} Commands            1/15 {/inverse}│{cyan} Files                1/5 {/color}│{cyan} Git status          1/11 {/color}
+{inverse}> config                  {/inverse}│>   README.md         ## B│> main
+  dupes                   │  + docs/            ### B│  no upstream
+  git clean-branches      │  + src/            #.# KB│
+  git recent              │    todo.txt           # B│  Staged (1)
+  git template list       │    日本語.txt        ## B│  A  src/new.js
+  git template show       │                          │
+  git template use        │                          │  Not staged (1)
+  git template unset      │                          │  M  src/app.js
+  hello                   │                          │
+  new                     │                          │  Untracked (1)
+  plugins                 │                          │  ?  todo.txt
+  plugins enable          │                          │
+  plugins disable         │                          │
+  rename                  │                          │
+  size                    │                          │
+                          │                          │
+                          │                          │
+                          │                          │
+                          │                          │
+                          │                          │
+                          │                          │
+{inverse} ?: shortcuts  q: quit  /: filter  Enter: open  Tab: next panel                {/inverse}

@@ -1,0 +1,24 @@
+{bold} toolsmith ui                                                        my-project {/bold}
+┌ Shortcuts ──────────────────────────────────────────────────────────────────┐
+│ {bold}Commands panel                                                             {/bold} │
+│   Up, k               move up                                               │
+│   Down, j             move down                                             │
+│   PgUp                move up a page                                        │
+│   PgDn                move down a page                                      │
+│   Home                go to the first item                                  │
+│   End                 go to the last item                                   │
+│   Tab, Right, l       go to the next panel                                  │
+│   Shift+Tab, Left, h  go to the previous panel                              │
+│   Enter               open the command's form                               │
+│   /                   filter the list as you type                           │
+│   Esc                 clear the filter                                      │
+│   ?                   show these shortcuts                                  │
+│   q, Ctrl+C           quit                                                  │
+│                                                                             │
+│ {bold}Files panel                                                                {/bold} │
+│   Up, k               move up                                               │
+│   Down, j             move down                                             │
+│   PgUp                move up a page                                        │
+│   PgDn                move down a page                                      │
+└ 1-20/129 ───────────────────────────────────────────────────────────────────┘
+{inverse} Esc: close  Down: scroll                                                      {/inverse}

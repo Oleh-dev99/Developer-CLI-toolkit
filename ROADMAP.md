@@ -195,8 +195,8 @@ toolsmith is being built in twelve milestones. M1 is the foundation that every l
 
 ### Tests
 
-- [ ] Drive the UI with scripted key presses at a fixed terminal size and compare screen snapshots
-- [ ] Tests for resizing, a too-small terminal and restoring the terminal after a crash
+- [x] Drive the UI with scripted key presses at a fixed terminal size and compare screen snapshots
+- [x] Tests for resizing, a too-small terminal and restoring the terminal after a crash
 
 ## M8 — Project health
 

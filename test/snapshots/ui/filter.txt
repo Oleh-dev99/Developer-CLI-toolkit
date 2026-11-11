@@ -1,0 +1,24 @@
+{bold} toolsmith ui                                                        my-project {/bold}
+{inverse} Commands /git_       1/6 {/inverse}│ Files                1/5 │ Git status          1/11
+{inverse}> git clean-branches      {/inverse}│>   README.md         ## B│> main
+  git recent              │  + docs/            ### B│  no upstream
+  git template list       │  + src/            #.# KB│
+  git template show       │    todo.txt           # B│  Staged (1)
+  git template use        │    日本語.txt        ## B│  A  src/new.js
+  git template unset      │                          │
+                          │                          │  Not staged (1)
+                          │                          │  M  src/app.js
+                          │                          │
+                          │                          │  Untracked (1)
+                          │                          │  ?  todo.txt
+                          │                          │
+                          │                          │
+                          │                          │
+                          │                          │
+                          │                          │
+                          │                          │
+                          │                          │
+                          │                          │
+                          │                          │
+                          │                          │
+{inverse} Enter: done  Esc: clear  Backspace: delete                                    {/inverse}

@@ -70,22 +70,26 @@ for (const [label, key] of [
 }
 
 test("a crash restores the terminal in the same order, and then reports the error", async (t) => {
-  // While drawing the first frame, while redrawing after a resize, and while
-  // handling a key.
-  for (const when of ["start", "resize", "key"]) {
+  // While drawing the first frame, while redrawing after a resize, while
+  // handling a key, and while redrawing on its own (as when output arrives).
+  for (const when of ["start", "resize", "key", "redraw"]) {
     const term = fakeTerminal();
     const real = dashboard(t);
     let frames = 0;
+    let hooks;
     const view = {
       render(size, paint) {
         frames++;
-        if (when === "start" || (when === "resize" && frames > 1)) {
+        if (when === "start" || ((when === "resize" || when === "redraw") && frames > 1)) {
           throw new Error(`broken at ${when}`);
         }
         return real.render(size, paint);
       },
       key() {
         throw new Error("broken at key");
+      },
+      connect(given) {
+        hooks = given;
       },
     };
     const app = createApp({ ...term, view });
@@ -94,10 +98,97 @@ test("a crash restores the terminal in the same order, and then reports the erro
       term.output.emit("resize");
     } else if (when === "key") {
       await pressKeys(term, "j");
+    } else if (when === "redraw") {
+      hooks.redraw();
     }
     await rejected;
     assertRestored(term);
+    // From the crash on, the terminal only gets put back: nothing is drawn
+    // after the normal screen is back, or after raw mode is off.
+    const left = term.events.findIndex((event) => event.includes(terminal.leaveAlternateScreen));
+    assert.deepEqual(term.events.slice(left), [terminal.showCursor + terminal.leaveAlternateScreen, "raw off"], `after a crash at ${when}`);
   }
+});
+
+test("toolsmith ui restores the terminal when something throws where nothing catches it, then reports the error", async (t) => {
+  // An error thrown in a timer, and a promise rejected with no handler, a
+  // moment after the first frame (see fixtures/crash.mjs).
+  const crash = new URL("fixtures/crash.mjs", import.meta.url).href;
+  for (const [kind, message] of [
+    ["exception", "a bug in a timer"],
+    ["rejection", "a promise nobody handled"],
+  ]) {
+    const env = { NODE_OPTIONS: `${screenTerminalEnv.NODE_OPTIONS} --import "${crash}"`, TOOLSMITH_TEST_CRASH: kind };
+    const { stdout, stderr, code } = await runCli(["ui"], { env, input: "", cwd: tempDir(t) });
+    assert.equal(code, 1, `after a ${kind}`);
+    assert.equal(stderr, `error: ${message}\n`);
+    assert.match(plain(stdout), / toolsmith ui .* Commands /s, "the first frame wasn't drawn");
+    // The normal screen with the cursor, then raw mode off, and nothing after.
+    assert.ok(stdout.endsWith(`${terminal.showCursor}${terminal.leaveAlternateScreen}<raw off>`), `the terminal wasn't restored in order after a ${kind}`);
+  }
+});
+
+test("resizing: larger, smaller, below 40x10 and back, each size cleared and drawn in full, with the selection kept", async (t) => {
+  const term = fakeTerminal(60, 15);
+  const app = createApp({ ...term, view: dashboard(t, { folder: "my-project", commands: describeCommands(createProgram()) }) });
+  app.start();
+  // The third command.
+  await pressKeys(term, "j", "j");
+  for (const [columns, rows] of [
+    [100, 30],
+    [50, 12],
+    [40, 10],
+    [39, 10],
+    [40, 9],
+    [20, 5],
+    [80, 24],
+  ]) {
+    Object.assign(term.output, { columns, rows });
+    const before = term.events.length;
+    term.output.emit("resize");
+    // Cleared, then every row drawn, each as wide as the terminal.
+    const [cleared, drawn, ...more] = term.events.slice(before);
+    assert.equal(cleared, terminal.clear, `${columns}x${rows}`);
+    assert.deepEqual(more, []);
+    for (let row = 0; row < rows; row++) {
+      assert.ok(drawn.includes(terminal.moveTo(row)), `${columns}x${rows}: row ${row} wasn't drawn`);
+    }
+    const screen = app.rows().map(plain);
+    assert.equal(screen.length, rows);
+    screen.forEach((text, row) => assert.equal(width(text), rowWidth(row, { columns, rows }), `${columns}x${rows}: row ${row}`));
+    if (columns < minimum.columns || rows < minimum.rows) {
+      assert.ok(screen.some((text) => text.includes("Terminal too small")), `${columns}x${rows} isn't too small`);
+    } else {
+      assert.match(screen[0], /^ toolsmith ui +my-project $/);
+      // Cut short in a narrow panel.
+      assert.ok(
+        screen.some((text) => text.startsWith("> git clean-branc")),
+        `${columns}x${rows}: the selection moved`,
+      );
+    }
+  }
+  app.stop();
+  await app.done;
+});
+
+test("too small, the screen says so in the middle, with the size it needs; q still quits, and restores the terminal", async (t) => {
+  const term = fakeTerminal(39, 9);
+  const app = createApp({ ...term, view: dashboard(t) });
+  app.start();
+  assert.deepEqual(
+    app.rows().map((row) => plain(row).trimEnd()),
+    ["", "", "", "          Terminal too small", "      39x9, needs at least 40x10", "                q: quit", "", "", ""],
+  );
+  // The first line is the warning, colored when colors are on.
+  const colored = createApp({ ...fakeTerminal(39, 9), color: true, view: dashboard(t) });
+  colored.start();
+  assert.ok(colored.rows()[3].startsWith("\x1b[33m"));
+  colored.stop();
+  await colored.done;
+
+  term.input.write("q");
+  await app.done;
+  assertRestored(term);
 });
 
 test("stopping twice restores the terminal once", async (t) => {
@@ -108,20 +199,6 @@ test("stopping twice restores the terminal once", async (t) => {
   app.stop();
   await app.done;
   assert.equal(term.events.filter((event) => event === "raw off").length, 1);
-});
-
-test("a resize clears the screen and redraws it at the new size", async (t) => {
-  const term = fakeTerminal(60, 15);
-  const app = createApp({ ...term, view: dashboard(t) });
-  app.start();
-  Object.assign(term.output, { columns: 80, rows: 20 });
-  const before = term.events.length;
-  term.output.emit("resize");
-  assert.equal(term.events[before], terminal.clear);
-  assert.equal(app.rows().length, 20);
-  assert.equal(width(plain(app.rows()[0])), 80);
-  app.stop();
-  await app.done;
 });
 
 test(`below ${minimum.columns}x${minimum.rows} the UI says the terminal is too small, until it's bigger again`, async (t) => {

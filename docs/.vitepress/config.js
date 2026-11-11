@@ -13,9 +13,9 @@ export default {
   // A GitHub Pages project site lives under the repository's name.
   base: "/Developer-CLI-toolkit/",
 
-  // RELEASING.md is for maintainers. The plugin guide keeps its file name,
-  // because the README on npm and older releases link to it.
-  srcExclude: ["RELEASING.md"],
+  // RELEASING.md and TERMINALS.md are for maintainers. The plugin guide keeps
+  // its file name, because the README on npm and older releases link to it.
+  srcExclude: ["RELEASING.md", "TERMINALS.md"],
   rewrites: { "PLUGINS.md": "plugins.md" },
 
   themeConfig: {

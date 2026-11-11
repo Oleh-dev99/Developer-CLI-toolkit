@@ -1,7 +1,8 @@
+import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { EventEmitter } from "node:events";
-import { chmodSync, existsSync, linkSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, linkSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, delimiter, dirname, join } from "node:path";
 import { PassThrough, Writable } from "node:stream";
@@ -75,6 +76,107 @@ export async function pressKeys(term, ...keys) {
     term.input.write(key);
     await new Promise((resolve) => setTimeout(resolve, key === "\x1b" ? 150 : 1));
   }
+}
+
+// Screen snapshots, for toolsmith ui (see ui-snapshots.test.js): each is a
+// text file in test/snapshots/ with the screen a test expects. When the tests
+// run with --update-snapshots (npm run test:update-snapshots), the files are
+// written from the screens as they are now, instead of checked.
+const snapshotFolder = fileURLToPath(new URL("snapshots/", import.meta.url));
+export const updatingSnapshots = process.argv.includes("--update-snapshots");
+
+// The names that snapshots give the codes of src/tui/screen.js's paints().
+const styleNames = { 1: "bold", 22: "/bold", 7: "inverse", 27: "/inverse", 33: "yellow", 36: "cyan", 39: "/color" };
+
+// Replaces each match of `pattern` in `row` with `placeholder`, and makes up
+// for the difference in width in the nearest run of padding (two spaces or
+// more) before it, or else after it, in the same panel (panels are separated
+// by "│"): so the columns stay where they were, whatever width the value had.
+function replaceAligned(row, pattern, placeholder) {
+  let text = row;
+  let from = 0;
+  for (let match; (match = new RegExp(pattern.source, "g").exec(text.slice(from))); ) {
+    const start = from + match.index;
+    text = text.slice(0, start) + placeholder + text.slice(start + match[0].length);
+    from = start + placeholder.length;
+    const extra = placeholder.length - match[0].length;
+    const panelStart = text.lastIndexOf("│", start) + 1;
+    const panelEnd = text.indexOf("│", from) === -1 ? text.length : text.indexOf("│", from);
+    const before = [...text.slice(panelStart, start).matchAll(/ {2,}/g)].at(-1);
+    const after = / {2,}/.exec(text.slice(from, panelEnd));
+    const padding = before ? { index: panelStart + before.index, length: before[0].length } : after ? { index: from + after.index, length: after[0].length } : null;
+    if (extra !== 0 && padding) {
+      const length = Math.max(1, padding.length - extra);
+      text = text.slice(0, padding.index) + " ".repeat(length) + text.slice(padding.index + padding.length);
+      if (padding.index < start) {
+        from += length - padding.length;
+      }
+    }
+  }
+  return text;
+}
+
+// A screen (one string per row, as app.rows() gives it) as the text of a
+// snapshot: a line per row, without the spaces that pad its end. Styles and
+// colors are shown by name, like {inverse}…{/inverse} or {cyan}…{/color}, so a
+// change in them shows in a diff too. What could differ from one system or run
+// to the next is replaced: each folder in `folders` ({ path: name }), wherever
+// its path comes up, with / between the names after it; the digits of sizes,
+// with # ("1.5 KB" becomes "#.# KB", as wide as it was, so a column of them
+// stays lined up); and durations, with <time>, keeping the columns after them
+// where they were (see replaceAligned()).
+export function screenText(rows, { folders = {} } = {}) {
+  const paths = Object.entries(folders).flatMap(([folder, name]) =>
+    [...new Set([folder, realpathSync(folder), realpathSync.native(folder)])].map((path) => [path, name]),
+  );
+  const lines = rows.map((row) => {
+    let text = row;
+    for (const [path, name] of paths) {
+      const escaped = path.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      text = text.replace(new RegExp(`${escaped}((?:[\\\\/][^\\s│"']*)?)`, "g"), (_, rest) => name + rest.replaceAll("\\", "/"));
+    }
+    text = text.replace(/\b\d+(?:\.\d+)? [KMGT]?B\b/g, (size) => size.replace(/\d/g, "#"));
+    text = replaceAligned(text, /\b\d+ min \d+ s\b|\b\d+\.\d s\b|\b\d+ ms\b/, "<time>");
+    const named = text.replace(/\x1b\[([0-9;]*)m/g, (_, codes) =>
+      codes
+        .split(";")
+        .map((code) => `{${styleNames[code] ?? `sgr ${code}`}}`)
+        .join(""),
+    );
+    return named.replaceAll("\x1b", "\\e").trimEnd();
+  });
+  return `${lines.join("\n")}\n`;
+}
+
+// Checks that `text` (from screenText()) is the snapshot `name`, the file
+// test/snapshots/<name>.txt. When it isn't, the error shows each line that
+// differs, as the snapshot has it (-) and as the screen is now (+).
+export function assertSnapshot(name, text) {
+  const file = join(snapshotFolder, `${name}.txt`);
+  const shown = `test/snapshots/${name}.txt`;
+  const update = "If the new screen is right, update the snapshots with: npm run test:update-snapshots";
+  if (updatingSnapshots) {
+    mkdirSync(dirname(file), { recursive: true });
+    writeFileSync(file, text);
+    return;
+  }
+  if (!existsSync(file)) {
+    assert.fail(`There's no snapshot ${shown} yet. The screen is:\n\n${text}\n${update}`);
+  }
+  // Git may check text files out with CRLF on Windows.
+  const expected = readFileSync(file, "utf8").replaceAll("\r\n", "\n");
+  if (expected === text) {
+    return;
+  }
+  const want = expected.split("\n");
+  const got = text.split("\n");
+  const differences = [];
+  for (let line = 0; line < Math.max(want.length, got.length); line++) {
+    if (want[line] !== got[line]) {
+      differences.push(`line ${line + 1}:`, `  - ${want[line] ?? "(no line)"}`, `  + ${got[line] ?? "(no line)"}`);
+    }
+  }
+  assert.fail(`The screen doesn't match the snapshot ${shown} (- snapshot, + screen):\n\n${differences.join("\n")}\n\n${update}`);
 }
 
 // Streams for createPrompt: `answers` are typed in all at once, then the input

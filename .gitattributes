@@ -2,6 +2,9 @@
 # change their line endings (Windows checkouts would otherwise get CRLF).
 templates/** -text
 
+# Screen snapshots are compared line by line, so they keep LF everywhere.
+test/snapshots/** text eol=lf
+
 # The fake npm for tests is a shell script on Linux and macOS, which needs LF,
 # and a batch file on Windows, which is safest with CRLF.
 test/fixtures/fake-npm/npm text eol=lf

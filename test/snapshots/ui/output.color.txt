@@ -1,0 +1,24 @@
+{bold} toolsmith ui                                                        my-project {/bold}
+{inverse} $ toolsmith size docs                                 exit code 0 after <time> {/inverse}
+### B   67%  guide.md
+ ## B   33%  deep/
+Total: ### B in 2 files.
+
+[exit code 0 after <time>]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+{inverse} Esc: back  Down: scroll  q: quit                                              {/inverse}
