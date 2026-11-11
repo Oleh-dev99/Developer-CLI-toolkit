@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { EventEmitter } from "node:events";
-import { chmodSync, existsSync, linkSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, linkSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, watch, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, delimiter, dirname, join } from "node:path";
 import { PassThrough, Writable } from "node:stream";
@@ -277,6 +277,24 @@ export function stopWhenDone(t, stop) {
   };
   started.set(t, [...(started.get(t) ?? []), once]);
   t.after(once);
+}
+
+// Returns once every folder this process has started to watch with fs.watch
+// is watched, so that a change the test makes next is reported. On macOS,
+// fs.watch watches a folder with FSEvents, and libuv (Node's I/O library)
+// starts that on a thread of its own after fs.watch has returned: it keeps one
+// FSEvents stream for all the folders the process watches, and makes it anew,
+// from "now", each time a folder is added, so a change made before the new
+// stream runs is never reported. Closing a watch is the one call that waits
+// for that thread, until the stream runs again for every folder still watched
+// (uv__fsevents_close() in libuv's src/unix/fsevents.c), so this watches the
+// test folder and closes that watch at once. On Linux and Windows, a folder is
+// watched from the moment fs.watch returns (inotify_add_watch,
+// ReadDirectoryChangesW), and there's nothing to wait for.
+export function waitForWatches() {
+  if (process.platform === "darwin") {
+    watch(fileURLToPath(new URL(".", import.meta.url))).close();
+  }
 }
 
 // Creates a temp folder that is deleted when the test `t` finishes, after what

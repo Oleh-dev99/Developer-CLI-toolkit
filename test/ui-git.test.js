@@ -11,7 +11,7 @@ import { createDashboard } from "../src/tui/dashboard.js";
 import { hintsFor } from "../src/tui/keys.js";
 import { createGitStatus, findRepository, parseStatus, statusRows } from "../src/tui/status.js";
 import { changeOf, watchFolders, watchTree } from "../src/tui/watch.js";
-import { canLockFolders, fakeTerminal, makeRepo, makeTree, pressKeys, stopWhenDone, tempDir, whileLocked } from "./helpers.js";
+import { canLockFolders, fakeTerminal, makeRepo, makeTree, pressKeys, stopWhenDone, tempDir, waitForWatches, whileLocked } from "./helpers.js";
 
 // The Git status panel of `toolsmith ui` (src/tui/status.js), following
 // changes with a folder watch (src/tui/watch.js), and its shortcuts to the git
@@ -47,6 +47,7 @@ function environment(t, repo) {
 async function session(t, repo, { columns = 90, rows = 14, ...options } = {}) {
   const term = fakeTerminal(columns, rows);
   const view = createDashboard({ folder: "repo", commands, cwd: repo.dir, env: environment(t, repo), editor: null, ...options });
+  waitForWatches();
   const app = createApp({ ...term, view });
   app.start();
   stopWhenDone(t, () => app.stop());
@@ -377,16 +378,21 @@ test("watching folder by folder, as on Linux: new, renamed and deleted folders, 
   stopWhenDone(t, () => watcher.close());
   const seen = (path) => until(() => changes.includes(path), path);
   assert.deepEqual(watcher.folders(), ["", ".git", ".git/refs", ".git/refs/heads", "src"]);
+  // Before each change, the folders are watched (on macOS, only a moment
+  // after fs.watch has returned; see waitForWatches).
+  waitForWatches();
   writeFileSync(join(dir, "src", "app.js"), "changed");
   await seen("src/app.js");
   // A new folder is watched as it comes, and what's put in it is seen.
   mkdirSync(join(dir, "docs"));
   await seen("docs");
+  waitForWatches();
   writeFileSync(join(dir, "docs", "guide.md"), "g");
   await seen("docs/guide.md");
   // Renamed, it's watched under its new name.
   renameSync(join(dir, "docs"), join(dir, "manual"));
   await seen("manual");
+  waitForWatches();
   writeFileSync(join(dir, "manual", "more.md"), "m");
   await seen("manual/more.md");
   assert.deepEqual(watcher.folders(), ["", ".git", ".git/refs", ".git/refs/heads", "manual", "src"]);
@@ -404,6 +410,7 @@ test("a folder locked while it's watched isn't an error, and the rest is still w
   // EACCES on Linux as soon as the folder was locked, which failed this test.
   const watcher = watchTree(dir, { filesIn: "src/", onChange: (change) => calls.push(change), onError: (err) => assert.fail(err), quiet: 50 });
   stopWhenDone(t, () => watcher.close());
+  waitForWatches();
   await whileLocked(t, join(dir, "locked"), async () => {
     // Only a change in src counts for `files`.
     writeFileSync(join(dir, "src", "new.js"), "n");
@@ -416,6 +423,7 @@ test("the watcher groups a burst of changes into one, ignores node_modules, and 
   const calls = [];
   const watcher = watchTree(dir, { onChange: (change) => calls.push(change), onError: (err) => assert.fail(err), quiet: 300, longest: 400 });
   try {
+    waitForWatches();
     for (let i = 0; i < 20; i++) {
       writeFileSync(join(dir, `file${i}.txt`), "x");
     }

@@ -15,7 +15,7 @@ import { editorCommand, openerFor, openWithApp } from "../src/tui/open.js";
 import { previewLimit, readPreview } from "../src/tui/preview.js";
 import { plainLine, terminal, width } from "../src/tui/screen.js";
 import { createTree } from "../src/tui/tree.js";
-import { canLockFolders, fakeTerminal, makeTree, pressKeys, stopWhenDone, tempDir, whileLocked } from "./helpers.js";
+import { canLockFolders, fakeTerminal, makeTree, pressKeys, stopWhenDone, tempDir, waitForWatches, whileLocked } from "./helpers.js";
 
 // The Files panel of `toolsmith ui`: the folder tree (src/tui/tree.js), file
 // previews (src/tui/preview.js), opening files (src/tui/open.js), and the file
@@ -60,6 +60,7 @@ async function session(t, { files = project, columns = 80, rows = 20, ...options
   delete env.FORCE_COLOR;
   const term = fakeTerminal(columns, rows);
   const view = createDashboard({ folder: "project", commands, cwd, env, editor: null, ...options });
+  waitForWatches();
   const app = createApp({ ...term, view });
   app.start();
   stopWhenDone(t, () => app.stop());
