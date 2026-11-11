@@ -15,6 +15,7 @@ import { makeTree, tempDir } from "./helpers.js";
 
 const bin = fileURLToPath(new URL("../bin/toolsmith.js", import.meta.url));
 const plain = (text) => text.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, "");
+const escape = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // What runs in the pseudo-terminal. `script` makes it 0x0 when its own input
@@ -40,7 +41,7 @@ const windows =
   process.platform === "win32" &&
   "Windows has no script command: a test can only open a real Windows console (ConPTY) through a native module like node-pty, a new dependency. docs/TERMINALS.md lists what to check by hand in Windows Terminal.";
 
-test("in a real terminal, toolsmith ui answers keys, q quits with exit code 0, and the terminal's settings are as they were", { skip: windows, timeout: 90000 }, async (t) => {
+test("in a real terminal, toolsmith ui answers keys, q alone quits with exit code 0, and the terminal's settings are as they were", { skip: windows, timeout: 90000 }, async (t) => {
   const cwd = makeTree(t, { "README.md": "# Project\n", "src/app.js": "a".repeat(1000) });
   const env = {
     ...process.env,
@@ -93,16 +94,23 @@ test("in a real terminal, toolsmith ui answers keys, q quits with exit code 0, a
     }
   };
 
-  await waitFor(/ toolsmith ui [\s\S]* Commands /, "the first frame");
-  // At the size stty gave the terminal: 24 rows, the last one drawn too.
-  assert.ok(output.includes(terminal.moveTo(23)) && !output.includes(terminal.moveTo(24)), "the screen isn't 24 rows high");
+  // The whole first frame, up to its last row, the hints. It can come in
+  // pieces: the frame is about 2 KB, and macOS's script passes output on 1 KB
+  // at a time (BUFSIZ), so its first rows can be here before its last ones.
+  await waitFor(/ toolsmith ui [\s\S]* Commands [\s\S]*\?: shortcuts {2}q: quit/, "the whole first frame");
+  // At the size stty gave the terminal: the hints on row 24, and nothing below.
+  assert.match(output, new RegExp(`${escape(terminal.moveTo(23))}(?:\\x1b\\[[0-9;]*m)* \\?: shortcuts`), `the hints aren't on row 24; ${shown()}`);
+  assert.ok(!output.includes(terminal.moveTo(24)), `a row below row 24 was drawn; ${shown()}`);
   // Down twice, as the terminal sends it: the third command is selected.
   child.stdin.write("\x1b[B");
   child.stdin.write("\x1b[B");
   await waitFor(/> git clean-branc/, "the third command to be selected");
   child.stdin.write("?");
   await waitFor(/Shortcuts/, "the shortcuts overlay");
+  // q alone ends toolsmith: the keys' pipe, and so the terminal, stays open
+  // until it has ended.
   child.stdin.write("q");
+  await waitFor(/\[after toolsmith\] exit=/, "toolsmith to end after q, with its terminal still open");
   child.stdin.end();
   const timer = setTimeout(stop, 30000);
   const { code, signal } = await exited;
