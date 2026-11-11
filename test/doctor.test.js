@@ -40,7 +40,7 @@ test("a project in order: no problems, exit code 0, in text, JSON and Markdown",
   const cwd = makeTree(t, { "package.json": packageJson({ license: "MIT" }), LICENSE: mit });
   const text = await runCli(["doctor"], { cwd });
   assert.equal(text.stderr, "");
-  assert.equal(text.stdout, "No problems found. Checked the current folder with 1 check: license.\n0 errors, 0 warnings, 0 info\n");
+  assert.equal(text.stdout, "No problems found. Checked the current folder with 3 checks: audit, license, outdated.\n0 errors, 0 warnings, 0 info\n");
   assert.equal(text.code, 0);
 
   const json = await runCli(["doctor", "--json"], { cwd });
@@ -49,12 +49,12 @@ test("a project in order: no problems, exit code 0, in text, JSON and Markdown",
   assert.ok(sameFolder(report.root, cwd));
   assert.deepEqual(
     { ...report, root: undefined },
-    { root: undefined, config: null, failOn: "error", failed: false, checks: ["license"], skipped: [], findings: [], summary: { errors: 0, warnings: 0, info: 0, ignored: 0 } },
+    { root: undefined, config: null, failOn: "error", failed: false, checks: ["audit", "license", "outdated"], skipped: [], findings: [], summary: { errors: 0, warnings: 0, info: 0, ignored: 0 } },
   );
 
   const markdown = await runCli(["doctor", "--markdown"], { cwd });
   assert.equal(markdown.code, 0);
-  assert.equal(markdown.stdout, "## toolsmith doctor\n\nNo problems found. Checked with 1 check: license.\n\n**0 errors, 0 warnings, 0 info**\n");
+  assert.equal(markdown.stdout, "## toolsmith doctor\n\nNo problems found. Checked with 3 checks: audit, license, outdated.\n\n**0 errors, 0 warnings, 0 info**\n");
 });
 
 test("an error ends the run with exit code 1; the report is grouped by severity, then by check, and ends with the summary", async (t) => {
@@ -76,7 +76,7 @@ test("an error ends the run with exit code 1; the report is grouped by severity,
       "    COPYING.md: can't tell which license COPYING.md has: its text isn't one that toolsmith knows",
       '      Fix: If it\'s meant to be a common license, use the standard MIT text, from https://spdx.org/licenses/MIT.html; if it\'s a license of your own, set "license" in package.json to "SEE LICENSE IN COPYING.md".',
       "",
-      "Checked the current folder with 1 check: license.",
+      "Checked the current folder with 3 checks: audit, license, outdated.",
       "1 error, 1 warning, 0 info",
       "",
     ].join("\n"),
@@ -139,12 +139,12 @@ test("--only and --skip choose checks by name, and an unknown name is an error",
   const only = await runCli(["doctor", "--only", "license", "--json"], { cwd });
   assert.deepEqual(JSON.parse(only.stdout).checks, ["license"]);
   const skip = await runCli(["doctor", "--skip", "license"], { cwd });
-  assert.equal(skip.stdout, "No problems found. Checked the current folder with no checks.\n0 errors, 0 warnings, 0 info\n");
+  assert.equal(skip.stdout, "No problems found. Checked the current folder with 2 checks: audit, outdated.\n0 errors, 0 warnings, 0 info\n");
   assert.equal(skip.code, 0);
-  for (const args of [["--only", "licence"], ["--skip", "license,outdated"], ["--only", "license", "--only", "dupes"]]) {
+  for (const args of [["--only", "licence"], ["--skip", "license,outdate"], ["--only", "license", "--only", "dupes"]]) {
     const { stdout, stderr, code } = await runCli(["doctor", ...args], { cwd });
     assert.equal(stdout, "");
-    assert.match(stderr, /^error: unknown check "\w+" in --(only|skip); the checks are: license \(see "toolsmith doctor --list"\)\n$/, args.join(" "));
+    assert.match(stderr, /^error: unknown check "\w+" in --(only|skip); the checks are: audit, license, outdated \(see "toolsmith doctor --list"\)\n$/, args.join(" "));
     assert.equal(code, 1);
   }
   const empty = await runCli(["doctor", "--only", ","], { cwd });
@@ -157,7 +157,16 @@ test("--only and --skip choose checks by name, and an unknown name is an error",
 test("--list shows the checks, and which need the network", async () => {
   const { stdout, code } = await runCli(["doctor", "--list"]);
   assert.equal(code, 0);
-  assert.equal(stdout, 'license  a LICENSE file with the license that "license" in package.json names\n1 check.\n');
+  assert.equal(
+    stdout,
+    [
+      "audit     known vulnerabilities in the dependencies, from npm audit (needs the network)",
+      'license   a LICENSE file with the license that "license" in package.json names',
+      "outdated  dependencies with newer versions, by major, minor and patch update, from npm outdated (needs the network)",
+      "3 checks.",
+      "",
+    ].join("\n"),
+  );
   assert.equal(listChecks([fake("a", null), fake("online", null, { network: true })]), "a       the a check\nonline  the online check (needs the network)\n2 checks.\n");
 });
 
@@ -190,7 +199,7 @@ test("toolsmith doctor finds its project from a folder inside it, and toolsmith.
   assert.deepEqual(report.summary, { errors: 1, warnings: 0, info: 0, ignored: 1 });
   assert.equal(byFile.code, 1);
   const text = await runCli(["doctor"], { cwd: join(cwd, "src") });
-  assert.match(text.stdout, /\nChecked \S.* with 1 check: license\. 1 finding ignored by toolsmith\.json\.\n1 error, 0 warnings, 0 info\n$/);
+  assert.match(text.stdout, /\nChecked \S.* with 3 checks: audit, license, outdated\. 1 finding ignored by toolsmith\.json\.\n1 error, 0 warnings, 0 info\n$/);
 
   settings({ ignore: [{ check: "license", file: "package.json", line: 4 }, { check: "license", file: "COPYING.md", line: 1 }] });
   assert.deepEqual(JSON.parse((await runCli(["doctor", "--json"], { cwd })).stdout).summary, { errors: 0, warnings: 1, info: 0, ignored: 1 });
@@ -199,9 +208,9 @@ test("toolsmith doctor finds its project from a folder inside it, and toolsmith.
   const whole = await runCli(["doctor", "--json"], { cwd });
   assert.equal(whole.code, 0);
   const ignored = JSON.parse(whole.stdout);
-  assert.deepEqual(ignored.checks, []);
+  assert.deepEqual(ignored.checks, ["audit", "outdated"]);
   assert.deepEqual(ignored.skipped, [{ check: "license", reason: "ignored in toolsmith.json" }]);
-  assert.match((await runCli(["doctor"], { cwd })).stdout, /with no checks\. Skipped: license \(ignored in toolsmith\.json\)\.\n/);
+  assert.match((await runCli(["doctor"], { cwd })).stdout, /with 2 checks: audit, outdated\. Skipped: license \(ignored in toolsmith\.json\)\.\n/);
 
   settings({ severity: { license: "warning" }, timeout: 5 });
   assert.deepEqual(JSON.parse((await runCli(["doctor", "--json"], { cwd })).stdout).summary, { errors: 0, warnings: 2, info: 0, ignored: 0 });
@@ -243,7 +252,7 @@ test("what toolsmith.json has that doctor doesn't know only gives a warning", as
   assert.equal(warnings.length, 5, stderr);
   assert.match(warnings[0], /^warning: unknown setting "docter" in config file .*toolsmith\.json \(ignored\)$/);
   assert.match(warnings[1], /^warning: unknown setting "doctor\.colour" in config file .*toolsmith\.json \(ignored\)$/);
-  assert.match(warnings[2], /^warning: unknown check "licence" in "doctor\.ignore\[0\]" in config file .*toolsmith\.json \(ignored\); the checks are: license$/);
+  assert.match(warnings[2], /^warning: unknown check "licence" in "doctor\.ignore\[0\]" in config file .*toolsmith\.json \(ignored\); the checks are: audit, license, outdated$/);
   assert.match(warnings[3], /^warning: unknown check "lisence" in "doctor\.ignore\[1\]" in config file /);
   assert.match(warnings[4], /^warning: unknown check "licenses" in "doctor\.severity" in config file /);
 });

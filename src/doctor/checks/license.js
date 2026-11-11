@@ -1,8 +1,9 @@
-import { access, readdir, readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { topLevelKeyLine } from "../../lib/json-text.js";
+import { keyLine } from "../../lib/json-text.js";
 import { fsErrorReason } from "../../lib/walk.js";
 import { detectLicenses, namesLicense, suggestedId } from "../licenses.js";
+import { exists, readPackage } from "../package.js";
 
 // The project's own license: a LICENSE file (or LICENCE, COPYING, UNLICENSE,
 // with an extension like .md or a suffix like -MIT) in its folder, whose text
@@ -33,7 +34,7 @@ export default {
 
     // An empty "license" says as little as none.
     const license = typeof pkg.data?.license === "string" && pkg.data.license.trim() === "" ? undefined : pkg.data?.license;
-    const at ={ file: "package.json", line: pkg.text && topLevelKeyLine(pkg.text, "license") };
+    const at = { file: "package.json", line: pkg.text && keyLine(pkg.text, "license") };
     if (license !== undefined && typeof license !== "string") {
       findings.push({
         ...at,
@@ -114,43 +115,6 @@ export default {
   },
 };
 
-// package.json as { data, text }, or { missing: true }, or { problem } with an
-// error finding when it can't be used.
-async function readPackage(root) {
-  let text;
-  try {
-    text = (await readFile(join(root, "package.json"), "utf8")).replace(/^﻿/, "");
-  } catch (err) {
-    if (err.code === "ENOENT") {
-      return { missing: true };
-    }
-    return { problem: { file: "package.json", severity: "error", message: `can't read package.json (${fsErrorReason(err)})` } };
-  }
-  let data;
-  try {
-    data = JSON.parse(text);
-  } catch (err) {
-    return {
-      problem: { file: "package.json", line: errorLine(text, err), severity: "error", message: `package.json isn't valid JSON: ${err.message}`, fix: "Correct the JSON, so that npm can read it." },
-    };
-  }
-  if (data === null || typeof data !== "object" || Array.isArray(data)) {
-    return { problem: { file: "package.json", severity: "error", message: "package.json doesn't hold a JSON object", fix: "Make it an object, like npm init writes." } };
-  }
-  return { data, text };
-}
-
-// The line of a JSON.parse error in `text`, from its message: newer versions
-// of V8 give the line, and all of them the position.
-function errorLine(text, err) {
-  const line = /\(line (\d+)/.exec(err.message)?.[1];
-  if (line) {
-    return Number(line);
-  }
-  const position = /at position (\d+)/.exec(err.message)?.[1];
-  return position === undefined ? undefined : text.slice(0, Number(position)).split("\n").length;
-}
-
 // The names of the license files in `root`, in alphabetical order.
 async function licenseFiles(root) {
   const entries = await readdir(root, { withFileTypes: true });
@@ -158,15 +122,6 @@ async function licenseFiles(root) {
     .filter((entry) => entry.isFile() && licenseName.test(entry.name) && !codeName.test(entry.name))
     .map((entry) => entry.name)
     .sort();
-}
-
-async function exists(path) {
-  try {
-    await access(path);
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 function unknownTextFix(file, license) {

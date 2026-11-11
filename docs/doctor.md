@@ -23,7 +23,7 @@ Errors
     package.json:4: "license" in package.json is MIT, but LICENSE has the ISC license text
       Fix: Make them agree: set "license" to "ISC", or put the MIT license text in LICENSE.
 
-Checked the current folder with 1 check: license.
+Checked the current folder with 3 checks: audit, license, outdated.
 1 error, 0 warnings, 0 info
 ```
 
@@ -35,7 +35,9 @@ A location is a file, relative to the project's folder, and a line when the chec
 
 | Check | What it looks at |
 |---|---|
+| `audit` | Known vulnerabilities in the dependencies, from `npm audit` (needs the network) |
 | `license` | The project has a LICENSE file with the license that `"license"` in `package.json` names |
+| `outdated` | Dependencies with newer versions, by major, minor and patch update, from `npm outdated` (needs the network) |
 
 `--only` runs only the checks you name, and `--skip` leaves some out; give names separated by commas, or the option more than once. An unknown name is an error, and `toolsmith doctor --list` shows the names.
 
@@ -56,6 +58,45 @@ A license file is one in the project's folder named LICENSE, LICENCE, COPYING or
 | `"license"` isn't text, like the old `{ "type": "MIT" }` | warning |
 
 `"license"` can be any SPDX expression, like `"(MIT OR Apache-2.0)"`: each license file's license must be one of those it names, so a project with two licenses can have a file for each, like `LICENSE-MIT` and `LICENSE-APACHE`. The GNU licenses match either form, like `GPL-3.0-only` or `GPL-3.0-or-later`, since their text doesn't say which. `UNLICENSED` needs no LICENSE file, and `SEE LICENSE IN <file>` takes any text in that file.
+
+### outdated
+
+Runs `npm outdated --json` in the project, and gives a finding for each dependency with a newer version, with its current, wanted and latest versions: *current* is the one installed, *wanted* the newest that the range in `package.json` allows, and *latest* the newest there is. The fix is the command that gets the update: `npm update <name>` for the wanted version, or `npm install <name>@<version>` for one outside the range.
+
+| Finding | Severity |
+|---|---|
+| A **major** update: the latest version is outside the `^` range of the current one, so it can break things. Below 1.0.0, that's also an update like 0.1 to 0.2 | warning |
+| A **minor** update: inside the `^` range, but not the `~` range | info |
+| A **patch** update: inside the `~` range | info |
+| A dependency in `package.json` that isn't installed | warning |
+
+npm exits with code 1 whenever something is outdated, so toolsmith goes by its JSON, not its exit code.
+
+### audit
+
+Runs `npm audit --json` in the project, and gives a finding for each advisory: the package and its vulnerable versions, the advisory's title and address, and whether npm has a fix. A dependency of the project is shown at its line in `package.json`, and one that comes with another package in `package-lock.json`, with the package that brings it.
+
+| npm's severity | Severity in the report |
+|---|---|
+| critical, high | error |
+| moderate | warning |
+| low, info | info |
+
+The fix says to run `npm audit fix` when that fixes it; when the fix is a major update of a package, which `npm audit fix` only makes with `--force`, it says so, since that can break things; and when there's no fix yet, it says that too. `npm audit` needs a `package-lock.json`.
+
+### Package managers
+
+The `outdated` and `audit` checks run npm, so they first make sure that the project uses npm. They go by `"packageManager"` in `package.json` (as Corepack uses it), then by the lockfile (`package-lock.json` or `npm-shrinkwrap.json` for npm, `pnpm-lock.yaml`, `yarn.lock`, `bun.lock`), then by what the package manager left in `node_modules`. They never run npm in a project that uses another one:
+
+| The project | What the checks do |
+|---|---|
+| Uses npm | Run npm |
+| Uses pnpm, Yarn or Bun | Nothing yet: an info finding says so, with the command to run instead, like `pnpm outdated` |
+| Has signs of two, like a `package-lock.json` and a `yarn.lock` | Nothing: a warning says which, so that you can remove the one that's left over |
+| Has dependencies, but no lockfile and no `node_modules` | Nothing: a warning says to install them first |
+| Has no dependencies, or no `package.json` | Nothing, without a finding |
+
+When npm can't do its part, that's an error finding of the check: npm isn't installed or isn't on the PATH, it gives something that isn't JSON, or it reports an error, like one from the registry, with npm's own reason. A check that runs out of time stops npm, with everything it started.
 
 ## Settings in toolsmith.json
 
@@ -88,7 +129,7 @@ Like `~/.toolsmithrc`, a `toolsmith.json` that isn't valid JSON, or a setting of
 
 The checks run at the same time, each for at most 30 seconds, or what `--timeout` or `"timeout"` says. A check that runs out of time, or crashes, is reported as an error of its own, and the other checks still run; `--debug` shows where a check crashed. Changing a check's severity in `toolsmith.json` doesn't change these errors, since they're about the check, not the project.
 
-Some checks need the network, like those that ask npm's registry; `--list` says which. Before running one, doctor looks up the registry's name (or that of the registry in `npm_config_registry`). When that fails, or with `--offline`, those checks are skipped with a warning, and the run doesn't fail for it.
+Some checks need the network, like `outdated` and `audit`, which ask npm's registry; `--list` says which. Before running one, doctor looks up the registry's name (or that of the registry in `npm_config_registry`; one given by its IP address needs no lookup). When that fails, or with `--offline`, those checks are skipped with a warning, and the run doesn't fail for it.
 
 ## Exit codes
 

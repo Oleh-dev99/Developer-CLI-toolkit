@@ -1,4 +1,6 @@
+import audit from "./audit.js";
 import license from "./license.js";
+import outdated from "./outdated.js";
 
 // toolsmith doctor's checks. Each is a module in this folder whose default
 // export is an object like this:
@@ -40,6 +42,9 @@ import license from "./license.js";
 // everything it finds, at the severity it thinks right. Keep a check's own
 // imports light, or import inside run(): every check is loaded for each run.
 //
+// The checks that run other programs, like npm, take the function that runs
+// them, so that the tests can give their own (see outdated.js and audit.js).
+//
 // To add a check, write its module and add it to this list, which keeps them
 // in alphabetical order.
-export const checks = [license];
+export const checks = [audit, license, outdated];

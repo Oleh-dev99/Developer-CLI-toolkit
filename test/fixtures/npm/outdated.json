@@ -1,0 +1,58 @@
+{
+  "commander": {
+    "current": "15.0.0",
+    "wanted": "15.0.1",
+    "latest": "16.1.0",
+    "dependent": "demo",
+    "location": "/work/demo/node_modules/commander"
+  },
+  "debug": {
+    "current": "2.6.9",
+    "wanted": "2.6.9",
+    "latest": "4.4.3",
+    "dependent": "demo",
+    "location": "/work/demo/node_modules/debug"
+  },
+  "left-pad": {
+    "wanted": "1.3.0",
+    "latest": "1.3.0",
+    "dependent": "demo"
+  },
+  "ms": {
+    "current": "2.0.0",
+    "wanted": "2.0.0",
+    "latest": "2.1.3",
+    "dependent": "demo",
+    "location": "/work/demo/node_modules/ms"
+  },
+  "picomatch": {
+    "current": "4.0.1",
+    "wanted": "4.0.3",
+    "latest": "4.0.3",
+    "dependent": "demo",
+    "location": "/work/demo/node_modules/picomatch"
+  },
+  "shared": [
+    {
+      "current": "1.0.0",
+      "wanted": "1.0.0",
+      "latest": "1.0.5",
+      "dependent": "app",
+      "location": "/work/demo/packages/app/node_modules/shared"
+    },
+    {
+      "current": "1.0.2",
+      "wanted": "1.0.2",
+      "latest": "1.0.5",
+      "dependent": "lib",
+      "location": "/work/demo/packages/lib/node_modules/shared"
+    }
+  ],
+  "tiny": {
+    "current": "0.1.0",
+    "wanted": "0.1.2",
+    "latest": "0.2.0",
+    "dependent": "demo",
+    "location": "/work/demo/node_modules/tiny"
+  }
+}

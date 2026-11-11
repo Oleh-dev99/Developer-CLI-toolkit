@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
-import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { formatDuration } from "../lib/format.js";
+import { killTree } from "../lib/program.js";
 import { createList } from "./list.js";
 import { plainLine } from "./screen.js";
 
@@ -117,27 +117,3 @@ export function runCommand(args, { cwd = process.cwd(), env = process.env, onCha
   return run;
 }
 
-// Ends `child` and all the processes it started. On Windows, taskkill ends
-// the whole tree (it's called by its full path, so that no other program of
-// that name can stand in for it). Elsewhere, the child leads its own process
-// group: the group gets SIGTERM, and SIGKILL two seconds later if anything is
-// left.
-export function killTree(child) {
-  if (child.exitCode !== null || child.signalCode !== null) {
-    return;
-  }
-  if (process.platform === "win32") {
-    const taskkill = join(process.env.SystemRoot ?? "C:\\Windows", "System32", "taskkill.exe");
-    spawn(taskkill, ["/pid", String(child.pid), "/T", "/F"], { stdio: "ignore", windowsHide: true }).on("error", () => child.kill());
-    return;
-  }
-  const signalGroup = (signal) => {
-    try {
-      process.kill(-child.pid, signal);
-    } catch {
-      // The group is gone already.
-    }
-  };
-  signalGroup("SIGTERM");
-  setTimeout(() => signalGroup("SIGKILL"), 2000).unref();
-}

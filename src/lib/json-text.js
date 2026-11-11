@@ -32,18 +32,31 @@ export function setTopLevelValue(text, key, value) {
   return text.slice(0, last.end) + separator + entry(indent) + text.slice(last.end);
 }
 
-// The line (from 1) that the top-level `key` of `text`, which holds a JSON
-// object, starts on, or undefined when the object has no such key. Like
-// JSON.parse, it takes the last of repeated keys.
-export function topLevelKeyLine(text, key) {
-  const member = scanObject(text).members.findLast((item) => item.key === key);
+// The line (from 1) that a key in `text`, which holds a JSON object, starts
+// on, or undefined when there's no such key. `path` leads to it through
+// objects: keyLine(text, "license"), or keyLine(text, "dependencies",
+// "commander"). Like JSON.parse, it takes the last of repeated keys.
+export function keyLine(text, ...path) {
+  let from = 0;
+  let member;
+  for (const key of path) {
+    if (text[skipSpace(text, from)] !== "{") {
+      return undefined;
+    }
+    member = scanObject(text, from).members.findLast((item) => item.key === key);
+    if (!member) {
+      return undefined;
+    }
+    from = member.start;
+  }
   return member && text.slice(0, member.keyStart).split("\n").length;
 }
 
-// Where the top-level object in `text` (valid JSON) opens and closes, and its
-// members, each with where its key starts and its value's span.
-function scanObject(text) {
-  const open = skipSpace(text, 0);
+// Where the object in `text` (valid JSON) that starts at `from` (after any
+// spaces) opens and closes, and its members, each with where its key starts
+// and its value's span.
+function scanObject(text, from = 0) {
+  const open = skipSpace(text, from);
   const members = [];
   let i = open + 1;
   for (;;) {

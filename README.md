@@ -146,11 +146,19 @@ Errors
     package.json:4: "license" in package.json is MIT, but LICENSE has the ISC license text
       Fix: Make them agree: set "license" to "ISC", or put the MIT license text in LICENSE.
 
-Checked the current folder with 1 check: license.
+Checked the current folder with 3 checks: audit, license, outdated.
 1 error, 0 warnings, 0 info
 ```
 
-Findings are grouped by severity (error, warning, info), then by check, and the report ends with a summary. `--json` prints it for scripts and `--markdown` for a pull request comment. The first check, `license`, makes sure the project has a LICENSE file with the license that `"license"` in `package.json` names. It tells MIT, ISC, Apache-2.0, the BSD and GNU licenses and a few more apart by their text, and a text it doesn't know is a warning, not a guess.
+Findings are grouped by severity (error, warning, info), then by check, and the report ends with a summary. `--json` prints it for scripts and `--markdown` for a pull request comment. The checks:
+
+| Check | What it reports |
+|---|---|
+| `audit` | Known vulnerabilities, from `npm audit`: critical and high ones are errors, moderate ones warnings, and low ones info, each with the advisory and whether `npm audit fix` fixes it (or only with `--force`, as a major update) |
+| `license` | Whether the LICENSE file has the license that `"license"` in `package.json` names. It tells MIT, ISC, Apache-2.0, the BSD and GNU licenses and a few more apart by their text, and a text it doesn't know is a warning, not a guess |
+| `outdated` | Newer versions of the dependencies, from `npm outdated`, with the current, wanted and latest versions: major updates (which can break things) are warnings, minor and patch updates info, each with the command that gets it |
+
+`audit` and `outdated` need the network, and run npm without a shell, only in projects that use npm: in a pnpm, Yarn or Bun project (told by `"packageManager"` in `package.json`, the lockfile or `node_modules`), they say so as info and don't run anything, and with signs of two package managers, they warn and don't guess.
 
 The project is the nearest folder, from the current one up, with a `toolsmith.json`, or else a `package.json`. The `"doctor"` section of its `toolsmith.json` can ignore findings (of a whole check, or of a check in a file or on one line), change the severity of a check's findings, and set how many seconds each check may take:
 

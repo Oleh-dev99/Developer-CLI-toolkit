@@ -211,10 +211,10 @@ toolsmith is being built in twelve milestones. M1 is the foundation that every l
 
 ### Dependencies
 
-- [ ] Outdated dependencies (from `npm outdated --json`), grouped into patch, minor and major updates
-- [ ] Known vulnerabilities (from `npm audit --json`), with npm's severities mapped to the report's levels
+- [x] Outdated dependencies (from `npm outdated --json`), grouped into patch, minor and major updates
+- [x] Known vulnerabilities (from `npm audit --json`), with npm's severities mapped to the report's levels
 - [ ] Unused dependencies (declared but never imported) and missing ones (imported but not declared)
-- [ ] npm first; detect pnpm and Yarn projects and use their equivalents, or say clearly that they aren't supported yet
+- [x] npm first; detect pnpm and Yarn projects and use their equivalents, or say clearly that they aren't supported yet
 
 ### Licenses
 

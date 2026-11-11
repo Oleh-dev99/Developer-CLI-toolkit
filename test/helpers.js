@@ -199,8 +199,9 @@ export function promptStreams(answers) {
 // TOOLSMITH_CONFIG always points to a temp path, so the real ~/.toolsmithrc is
 // never read, and NO_COLOR=1 is set unless a test overrides it. The fake npm
 // comes first on the PATH, so tests never run the real npm (or download
-// anything). npm_config_prefix, where global plugins are looked for, points to
-// a temp path too, unless a test sets it. Set a variable to undefined in `env`
+// anything), and npm_config_registry is an address where nothing answers.
+// npm_config_prefix, where global plugins are looked for, points to a temp
+// path too, unless a test sets it. Set a variable to undefined in `env`
 // to remove it, and PATH to replace the whole PATH. `cwd` sets the folder the
 // CLI runs in, `input` is typed into the CLI (otherwise its input is empty),
 // and `script` runs another copy of toolsmith.
@@ -208,12 +209,19 @@ export function runCli(args, { env = {}, cwd, input, script = bin } = {}) {
   const childEnv = {};
   for (const [key, value] of Object.entries(process.env)) {
     // Windows spells it "Path"; one spelling lets `env` replace it. npm's
-    // prefix may come in any case, so any spelling of it is dropped.
-    if (key.toLowerCase() !== "npm_config_prefix") {
+    // prefix and registry may come in any case, so any spelling of them is
+    // dropped.
+    if (!["npm_config_prefix", "npm_config_registry"].includes(key.toLowerCase())) {
       childEnv[key.toUpperCase() === "PATH" ? "PATH" : key] = value;
     }
   }
   childEnv.PATH = [fakeNpmFolder, childEnv.PATH].filter(Boolean).join(delimiter);
+  // The fake npm runs its JavaScript with this Node.js.
+  childEnv.FAKE_NPM_NODE = process.execPath;
+  // A registry that nothing listens on, so that nothing can reach the real
+  // one. It's an IP address, which toolsmith doctor doesn't need to look up,
+  // so its checks that need the network run, with the fake npm.
+  childEnv.npm_config_registry = "http://127.0.0.1:9/";
   // The test runner sets FORCE_COLOR for test files when the terminal has
   // colors, so start from the same color setup everywhere.
   delete childEnv.FORCE_COLOR;

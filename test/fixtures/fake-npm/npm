@@ -3,7 +3,11 @@
 # on the PATH, so tests never run the real npm. It writes its arguments to
 # fake-npm.txt in the folder it runs in, and a package-lock.json like npm does,
 # and then fails with the exit code in FAKE_NPM_EXIT_CODE if that's set.
-# npm.cmd does the same on Windows.
+# npm.cmd does the same on Windows. "npm outdated" and "npm audit", which
+# toolsmith doctor runs, are answered by doctor-npm.mjs instead.
+case "$1" in
+  outdated|audit) exec "${FAKE_NPM_NODE:-node}" "$(dirname "$0")/doctor-npm.mjs" "$@" ;;
+esac
 echo "fake npm $*"
 echo "$*" > fake-npm.txt
 echo '{ "fake": true }' > package-lock.json
